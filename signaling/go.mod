@@ -1,4 +1,4 @@
-module github.com/atlasnexustech/nexdesk-signaling
+module github.com/atlasnexustech/atlas-desk-signaling
 
 go 1.22.2
 

@@ -1,4 +1,4 @@
-module github.com/atlasnexustech/nexdesk-agent
+module github.com/atlasnexustech/atlas-desk-agent
 
 go 1.25.0
 

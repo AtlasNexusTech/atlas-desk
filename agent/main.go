@@ -1,5 +1,5 @@
-// NexDesk Agent — cross-platform screen capture + WebRTC streaming + input
-// Build: go build -o nexdesk-agent .
+// Atlas Desk Agent — cross-platform screen capture + WebRTC streaming + input
+// Build: go build -o atlas-desk-agent .
 // Linux: requires xdotool for input simulation
 // Windows: requires robotgo (CGO) — build with: GOOS=windows CGO_ENABLED=1 go build
 
@@ -44,7 +44,7 @@ func main() {
 		*agentID = host
 	}
 
-	log.Printf("═══ NexDesk Agent v0.1 ═══")
+	log.Printf("═══ Atlas Desk Agent v0.1 ═══")
 	log.Printf("ID: %s | OS: %s | Arch: %s", *agentID, runtime.GOOS, runtime.GOARCH)
 	log.Printf("Signal: %s | FPS: %d", *signalURL, *fps)
 

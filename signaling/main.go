@@ -1,4 +1,4 @@
-// NexDesk Signaling Server — matches agents to clients, relays WebRTC SDP/ICE
+// Atlas Desk Signaling Server — matches agents to clients, relays WebRTC SDP/ICE
 package main
 
 import (
@@ -43,7 +43,7 @@ func main() {
 	})
 
 	port := ":8800"
-	log.Printf("NexDesk signaling server on %s", port)
+	log.Printf("Atlas Desk signaling server on %s", port)
 	log.Fatal(http.ListenAndServe(port, nil))
 }
 

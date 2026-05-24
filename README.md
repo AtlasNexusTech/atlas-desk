@@ -1,4 +1,4 @@
-# NexDesk — Open Source Remote Desktop
+# Atlas Desk — Open Source Remote Desktop
 
 Lightweight AnyDesk alternative. Binary agent on the host PC, web-based viewer (zero install).
 
@@ -29,13 +29,13 @@ open client/index.html  # Enter Agent ID, click Connect
 
 ```bash
 # Signaling server
-cd signaling && go build -o nexdesk-signaling .
+cd signaling && go build -o atlas-desk-signaling .
 
 # Agent (Linux — requires xdotool)
-cd agent && go build -o nexdesk-agent .
+cd agent && go build -o atlas-desk-agent .
 
 # Agent (Windows — requires CGO + MinGW)
-cd agent && GOOS=windows CGO_ENABLED=1 go build -o nexdesk-agent.exe .
+cd agent && GOOS=windows CGO_ENABLED=1 go build -o atlas-desk-agent.exe .
 ```
 
 ## Protocol
