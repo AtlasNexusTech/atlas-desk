@@ -2,12 +2,12 @@
 
 **P2P remote desktop with WebRTC.** No servers routing your video. Free. Open source.
 
-## v0.6 — Connection Aliases + Desktop Build
+## v0.7 — Tray Icon + Auto-Reconnect + Settings
 
 | Feature | Status |
 |---------|--------|
 | P2P WebRTC (STUN) | ✅ |
-| TURN server (NAT fallback) | ✅ Configurable via `~/.atlas-desk/config.json` |
+| TURN server (NAT fallback) | ✅ Configurable |
 | JPEG screen streaming | ✅ 15 FPS, Q65 |
 | Mouse/keyboard control | ✅ Cross-platform |
 | Numeric 9-digit IDs | ✅ AnyDesk-style |
@@ -15,9 +15,11 @@
 | File transfer | ✅ Bidirectional |
 | Connection password | ✅ SHA-256 challenge-response |
 | Clipboard sync | ✅ Auto-sync both directions |
-| Desktop app (Tauri) | ✅ CI-built, see [Actions](https://github.com/AtlasNexusTech/atlas-desk/actions) |
+| Desktop app (Tauri) | ✅ Tray icon, minimize to tray |
+| Auto-reconnect | ✅ On connection loss |
+| Settings panel | ✅ Signal server URL |
 | Encrypted sessions | ✅ WebRTC DTLS |
-| Mobile client | ❌ |
+| Mobile client | ❌ Future |
 
 ## Architecture
 
