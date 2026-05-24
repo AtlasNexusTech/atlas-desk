@@ -1,6 +1,4 @@
-// Atlas Desk Agent v0.2 — WebRTC P2P streaming + WinAPI/Linux input
-//go:build !windows
-// +build !windows
+// Atlas Desk Agent v0.2 — WebRTC P2P streaming + cross-platform input
 
 package main
 

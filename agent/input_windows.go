@@ -44,8 +44,8 @@ func clickMouse(btn string) {
 func pressKey(key string) {
 	vk := keyToVK(key)
 	if vk == 0 { return }
-	syscall.Syscall(prockeybdEvent.Addr(), 4, uintptr(vk), 0, 0, 0)
-	syscall.Syscall(prockeybdEvent.Addr(), 4, uintptr(vk), 0, KEYEVENTF_KEYUP, 0)
+	syscall.Syscall(prockeybdEvent.Addr(), 4, uintptr(vk), 0, 0)
+	syscall.Syscall(prockeybdEvent.Addr(), 4, uintptr(vk), 0, KEYEVENTF_KEYUP)
 }
 
 func typeText(text string) {
@@ -53,12 +53,12 @@ func typeText(text string) {
 		vk := charToVK(c)
 		if vk == 0 { continue }
 		if c >= 'A' && c <= 'Z' {
-			syscall.Syscall(prockeybdEvent.Addr(), 4, 0x10, 0, 0, 0) // VK_SHIFT
+			syscall.Syscall(prockeybdEvent.Addr(), 4, 0x10, 0, 0) // VK_SHIFT
 		}
-		syscall.Syscall(prockeybdEvent.Addr(), 4, uintptr(vk), 0, 0, 0)
-		syscall.Syscall(prockeybdEvent.Addr(), 4, uintptr(vk), 0, KEYEVENTF_KEYUP, 0)
+		syscall.Syscall(prockeybdEvent.Addr(), 4, uintptr(vk), 0, 0)
+		syscall.Syscall(prockeybdEvent.Addr(), 4, uintptr(vk), 0, KEYEVENTF_KEYUP)
 		if c >= 'A' && c <= 'Z' {
-			syscall.Syscall(prockeybdEvent.Addr(), 4, 0x10, 0, KEYEVENTF_KEYUP, 0)
+			syscall.Syscall(prockeybdEvent.Addr(), 4, 0x10, 0, KEYEVENTF_KEYUP)
 		}
 	}
 }
