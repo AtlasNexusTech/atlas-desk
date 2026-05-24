@@ -29,13 +29,15 @@ var (
 	fps         = flag.Int("fps", 15, "Capture framerate")
 	jpegQuality = flag.Int("quality", 65, "JPEG quality (1-100)")
 	password    = flag.String("pass", "", "Connection password (overrides config)")
+	alias       = flag.String("alias", "", "Display alias (e.g. 'PC Bureau')")
 )
 
 // ── Config ───────────────────────────────────────────────────
 
 type Config struct {
-	ID       string `json:"id"`
-	Password string `json:"password,omitempty"` // SHA-256 of password, or empty = no auth
+	ID          string       `json:"id"`
+	Password    string       `json:"password,omitempty"` // SHA-256 of password, or empty = no auth
+	Alias       string       `json:"alias,omitempty"`    // Display name
 	TurnServers []TurnServer `json:"turn_servers,omitempty"`
 }
 
@@ -63,6 +65,10 @@ func loadConfig() *Config {
 	}
 	if *password != "" {
 		cfg.Password = hashPassword(*password)
+		saveConfig(cfg)
+	}
+	if *alias != "" {
+		cfg.Alias = *alias
 		saveConfig(cfg)
 	}
 
@@ -132,7 +138,10 @@ func main() {
 
 	cfg := loadConfig()
 
-	log.Printf("◆ Atlas Desk Agent v0.4  ID: %s", cfg.ID)
+	log.Printf("◆ Atlas Desk Agent v0.6  ID: %s", cfg.ID)
+	if cfg.Alias != "" {
+		log.Printf("   Alias: %s", cfg.Alias)
+	}
 	if cfg.Password != "" {
 		log.Printf("🔒 Password: set")
 	}
@@ -145,6 +154,9 @@ func main() {
 	defer conn.Close()
 
 	regPayload := map[string]string{"id": cfg.ID, "role": "agent"}
+	if cfg.Alias != "" {
+		regPayload["alias"] = cfg.Alias
+	}
 	if cfg.Password != "" {
 		regPayload["has_password"] = "true"
 	}

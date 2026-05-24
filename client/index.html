@@ -50,7 +50,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 <div id="topbar">
   <span class="logo">◆ Atlas Desk</span>
-  <input id="agentId" placeholder="000 000 000" maxlength="12" autocomplete="off">
+  <input id="agentId" placeholder="PC Bureau or 000 000 000" maxlength="40" autocomplete="off">
   <button class="btn-connect" id="connectBtn" onclick="connect()">Connect</button>
   <button class="btn-disconnect" id="disconnectBtn" onclick="disconnect()" style="display:none">✕</button>
   <button class="btn-file" id="fileBtn" onclick="toggleFiles()" style="display:none" title="File Transfer">📁</button>
@@ -149,6 +149,15 @@ async function connect() {
         $('passError').textContent = JSON.parse(msg.payload).reason === 'wrong_password' ? 'Wrong password' : 'Auth failed';
         $('passError').style.display = 'block';
         status('❌ Wrong password', 'var(--red)');
+        break;
+
+      case 'error':
+        const errReason = JSON.parse(msg.payload || '{}').reason || 'Unknown error';
+        if (errReason === 'target_not_found') {
+          status(`❌ Not found: "${JSON.parse(msg.payload).target}"`, 'var(--red)');
+          overlay(false);
+          disconnect();
+        }
         break;
 
       case 'offer':
