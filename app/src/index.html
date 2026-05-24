@@ -55,6 +55,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <button class="btn-disconnect" id="disconnectBtn" onclick="disconnect()" style="display:none">✕</button>
   <button class="btn-file" id="fileBtn" onclick="toggleFiles()" style="display:none" title="File Transfer">📁</button>
   <button class="btn-file" id="clipBtn" onclick="pasteToRemote()" style="display:none" title="Paste to Remote">📋</button>
+  <button class="btn-file" id="settingsBtn" onclick="toggleSettings()" title="Settings">⚙️</button>
   <span id="status">Idle</span>
 </div>
 
@@ -80,6 +81,17 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 </div>
 
 <!-- File panel -->
+<!-- Settings dialog -->
+<div class="dialog" id="settingsDialog">
+  <div class="dialog-box">
+    <h2>⚙️ Settings</h2>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Signal Server URL</p>
+    <input type="text" id="signalUrl" placeholder="ws://localhost:8800/ws" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text);font-size:13px;outline:none;margin-bottom:12px">
+    <button onclick="saveSettings()" style="width:100%;padding:10px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff">Save</button>
+    <button onclick="toggleSettings()" style="width:100%;padding:8px;border-radius:8px;border:none;font-size:12px;cursor:pointer;background:none;color:var(--muted);margin-top:6px">Cancel</button>
+  </div>
+</div>
+<!-- File panel -->
 <div id="filePanel">
   <h3>📁 Files</h3>
   <div id="fileList" style="max-height:200px;overflow-y:auto;margin-bottom:8px"></div>
@@ -93,10 +105,17 @@ let ws, pc, screenDC, fileDC, clipboardDC, _inputDC;
 let myId = 'viewer-' + Date.now().toString(36);
 let canvas = document.getElementById('canvas');
 let ctx = canvas.getContext('2d');
-const SIGNAL = 'ws://localhost:8800/ws';
+const SIGNAL = (() => {
+  const p = new URLSearchParams(window.location.search);
+  return p.get('signal') || localStorage.getItem('atlas-desk-signal') || 'ws://localhost:8800/ws';
+})();
 const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 const remoteFiles = new Map();
 let img = new Image();
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+let wasConnected = false;
+let savedAgentId = '';
 let pendingAgentId = null;
 let authToken = null;
 let hashedPassword = null; // SHA-256 of password, received from agent
@@ -119,8 +138,11 @@ async function sha256(str) {
 // ── Connect ──
 async function connect() {
   const agentId = $('agentId').value.replace(/\s/g, '');
-  if (!agentId) return alert('Enter Agent ID');
-  pendingAgentId = agentId;
+  if (!agentId && !savedAgentId) return alert('Enter Agent ID');
+  if (!agentId) $('agentId').value = savedAgentId;
+  const targetId = agentId || savedAgentId;
+  pendingAgentId = targetId;
+  savedAgentId = targetId;
 
   overlay(true, 'Signaling...');
   status('Signaling...', 'var(--accent)');
@@ -173,7 +195,21 @@ async function connect() {
     }
   };
 
-  ws.onclose = () => { status('Disconnected', 'var(--red)'); overlay(false); };
+  ws.onclose = () => { 
+    if (wasConnected) {
+      // Auto-reconnect
+      status(`⚠️ Connection lost — reconnecting in 3s...`, 'var(--red)');
+      reconnectTimer = setTimeout(() => {
+        if (savedAgentId) {
+          reconnectAttempts++;
+          connect();
+        }
+      }, 3000);
+    } else {
+      status('Disconnected', 'var(--red)'); 
+      overlay(false); 
+    }
+  };
   ws.onerror = () => status('Signal error', 'var(--red)');
 
   $('connectBtn').style.display = 'none';
@@ -215,7 +251,7 @@ async function handleOffer(msg, agentId) {
     if (dc.label === 'screen') {
       screenDC = dc;
       dc.onmessage = handleScreenFrame;
-      dc.onopen = () => { overlay(false); status('⚡ Streaming', 'var(--green)'); };
+      dc.onopen = () => { overlay(false); wasConnected = true; status('⚡ Streaming', 'var(--green)'); };
     } else if (dc.label === 'files') {
       fileDC = dc;
       dc.onmessage = handleFileMsg;
@@ -383,8 +419,31 @@ async function pasteToRemote() {
   }
 }
 
+// ── Settings ──
+function toggleSettings() {
+  const d = $('settingsDialog');
+  if (d.style.display === 'flex') {
+    d.style.display = 'none';
+  } else {
+    $('signalUrl').value = localStorage.getItem('atlas-desk-signal') || 'ws://localhost:8800/ws';
+    d.style.display = 'flex';
+  }
+}
+
+function saveSettings() {
+  const url = $('signalUrl').value.trim();
+  if (url) {
+    localStorage.setItem('atlas-desk-signal', url);
+    status('✅ Settings saved — reload page to apply', 'var(--green)');
+  }
+  $('settingsDialog').style.display = 'none';
+}
+
 // ── Disconnect ──
 function disconnect() {
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  wasConnected = false;
+  savedAgentId = '';
   if (_inputDC) _inputDC.close();
   if (screenDC) screenDC.close();
   if (fileDC) fileDC.close();
