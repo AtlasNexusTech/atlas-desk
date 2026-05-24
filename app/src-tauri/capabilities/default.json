@@ -1,0 +1,8 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for Atlas Desk",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

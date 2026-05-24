@@ -1,0 +1,6 @@
+# Tauri build artifacts
+app/src-tauri/target/
+app/src-tauri/icons/icon.icns
+
+# Node
+app/node_modules/

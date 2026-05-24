@@ -2,7 +2,7 @@
 
 **P2P remote desktop with WebRTC.** No servers routing your video. Free. Open source.
 
-## v0.4 — TURN Support + Connection Password + Config File
+## v0.5 — Clipboard Sync + Desktop App (Tauri)
 
 | Feature | Status |
 |---------|--------|
@@ -13,9 +13,11 @@
 | Numeric 9-digit IDs | ✅ AnyDesk-style |
 | File transfer | ✅ Bidirectional |
 | Connection password | ✅ SHA-256 challenge-response |
+| Clipboard sync | ✅ Auto-sync both directions |
+| Desktop app (Tauri) | ✅ CI-built, see [Actions](https://github.com/AtlasNexusTech/atlas-desk/actions) |
 | Encrypted sessions | ✅ WebRTC DTLS |
-| Clipboard sync | ❌ |
-| Desktop app | ❌ |
+| Connection aliases | ❌ |
+| Mobile client | ❌ |
 
 ## Architecture
 
@@ -81,11 +83,11 @@ Set password via CLI: `./atlas-desk-agent -pass "mysecret"`
 
 - [x] TURN server for restrictive NATs
 - [x] Connection password
-- [ ] H.264 hardware encoding (lower bandwidth)
-- [ ] Clipboard sync
-- [ ] Desktop app (Tauri — cross-platform)
+- [x] Clipboard sync
+- [x] Desktop app (Tauri via CI)
 - [ ] Mobile client
 - [ ] Connection aliases (name instead of ID)
+- [ ] H.264 hardware encoding (lower bandwidth)
 
 ## License
 

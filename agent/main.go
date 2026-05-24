@@ -265,6 +265,11 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 			dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 				handleFileReceive(msg.Data)
 			})
+		case "clipboard":
+			dc.OnOpen(func() {})
+			dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+				handleClipboardReceive(msg.Data)
+			})
 		}
 	})
 
@@ -288,6 +293,17 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 		return
 	}
 	fileDC.OnOpen(func() {})
+
+	// Create clipboard channel (agent → client for clipboard sync)
+	clipDC, err := pc.CreateDataChannel("clipboard", &webrtc.DataChannelInit{
+		Ordered: func(b bool) *bool { return &b }(true),
+	})
+	if err != nil {
+		log.Printf("clipboard DC error: %v", err)
+		return
+	}
+	var gotClipboard *webrtc.DataChannel
+	clipDC.OnOpen(func() { gotClipboard = clipDC })
 
 	// ICE relay
 	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
@@ -352,6 +368,21 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 
 	<-inputReady
 	log.Printf("✅ P2P connected — streaming %dx%d @ %d FPS", bounds.Dx(), bounds.Dy(), *fps)
+
+	// Clipboard polling (every 500ms, only send on change)
+	cb := newClipboard()
+	lastClip := ""
+	go func() {
+		for {
+			time.Sleep(500 * time.Millisecond)
+			text := cb.GetText()
+			if text != "" && text != lastClip && gotClipboard != nil && gotClipboard.ReadyState() == webrtc.DataChannelStateOpen {
+				msg, _ := json.Marshal(map[string]string{"type": "clipboard", "text": text})
+				gotClipboard.Send(msg)
+				lastClip = text
+			}
+		}
+	}()
 
 	// Frame capture loop
 	ticker := time.NewTicker(time.Second / time.Duration(*fps))
@@ -446,6 +477,18 @@ func handleFileReceive(data []byte) {
 			delete(activeReceives, fileID)
 		}
 		log.Printf("❌ File error: %v", meta["error"])
+	}
+}
+
+// ── Clipboard Receive ──────────────────────────────────────
+
+func handleClipboardReceive(data []byte) {
+	var msg map[string]string
+	json.Unmarshal(data, &msg)
+	if msg["type"] == "clipboard" && msg["text"] != "" {
+		cb := newClipboard()
+		cb.SetText(msg["text"])
+		log.Printf("📋 Clipboard synced: %d chars", len(msg["text"]))
 	}
 }
 
