@@ -2,3 +2,6 @@
 nexdesk-signaling
 nexdesk-agent
 .DS_Store
+*.exe
+atlas-desk-signaling
+atlas-desk-agent
