@@ -1,0 +1,14 @@
+[Unit]
+Description=Atlas Desk Agent — Remote Desktop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/atlas-desk-agent -signal ws://localhost:8800/ws
+Restart=always
+RestartSec=10
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=default.target

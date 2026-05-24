@@ -2,13 +2,13 @@
 
 **P2P remote desktop with WebRTC.** No servers routing your video. Free. Open source.
 
-## v0.7 — Tray Icon + Auto-Reconnect + Settings
+## v0.7 — Diff Encoding + CI Pipeline + Auto-Start
 
 | Feature | Status |
 |---------|--------|
 | P2P WebRTC (STUN) | ✅ |
 | TURN server (NAT fallback) | ✅ Configurable |
-| JPEG screen streaming | ✅ 15 FPS, Q65 |
+| Screen streaming (JPEG diff) | ✅ 15 FPS, Q65, 32×32 block diffs |
 | Mouse/keyboard control | ✅ Cross-platform |
 | Numeric 9-digit IDs | ✅ AnyDesk-style |
 | Connection aliases | ✅ "PC Bureau" instead of "437 192 805" |
@@ -18,6 +18,8 @@
 | Desktop app (Tauri) | ✅ Tray icon, minimize to tray |
 | Auto-reconnect | ✅ On connection loss |
 | Settings panel | ✅ Signal server URL |
+| Connection stats | ✅ FPS, bandwidth, frame type |
+| Linux auto-start | ✅ systemd service |
 | Encrypted sessions | ✅ WebRTC DTLS |
 | Mobile client | ❌ Future |
 
@@ -26,7 +28,7 @@
 ```
 ┌──────────────┐         WebRTC P2P         ┌──────────────┐
 │   Agent      │◄──────────────────────────►│   Client      │
-│  (Go binary) │   screen: JPEG frames      │  (Web browser) │
+│  (Go binary) │   screen: JPEG diff frames │  (Web browser) │
 │              │   input: mouse/keyboard    │               │
 │  Linux/Win   │   files: file transfer     │  Zero install  │
 └──────┬───────┘                            └───────────────┘
@@ -73,13 +75,30 @@ Edit `~/.atlas-desk/config.json` on the agent:
 ```
 Set password via CLI: `./atlas-desk-agent -pass "mysecret"`
 
-## Data Channels
+### Auto-Start (Linux systemd)
+```bash
+# Copy binary
+cp agent/atlas-desk-agent ~/.local/bin/
+
+# Install service
+mkdir -p ~/.config/systemd/user
+cp deploy/atlas-desk-agent.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now atlas-desk-agent
+
+# Check
+systemctl --user status atlas-desk-agent
+journalctl --user -u atlas-desk-agent -f
+```
+
+### Diff Encoding (v0.7)
+Screen frames use block-based diff encoding. Only changed 32×32 blocks are transmitted, giving 50-80% bandwidth savings. Full keyframes sent every 30 frames for recovery.
 
 | Channel | Direction | Protocol |
 |---------|-----------|----------|
-| `screen` | Agent → Client | [4B metaLen][JSON meta{w,h,f}][4B jpgLen][JPEG] |
+| `screen` | Agent → Client | Full: `[0x00][4B meta][JSON][4B len][JPEG]` — Diff: `[0x01][4B meta][JSON][2B n][blocks...]` |
 | `input` | Client → Agent | JSON: `{action, x, y, key, button, dy}` |
-| `files` | Bidirectional | [4B metaLen][JSON meta{type,name,size,id,offset}][data] |
+| `files` | Bidirectional | [4B metaLen][JSON meta][data] |
 
 ## Roadmap
 
@@ -88,6 +107,9 @@ Set password via CLI: `./atlas-desk-agent -pass "mysecret"`
 - [x] Clipboard sync
 - [x] Desktop app (Tauri via CI)
 - [x] Connection aliases (name instead of ID)
+- [x] Screen diff encoding (50-80% less bandwidth)
+- [x] CI release pipeline (Go binaries + signaling)
+- [x] Linux auto-start (systemd)
 - [ ] Mobile client
 - [ ] H.264 hardware encoding (lower bandwidth)
 
