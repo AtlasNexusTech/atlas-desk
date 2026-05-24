@@ -87,8 +87,8 @@ Set password via CLI: `./atlas-desk-agent -pass "mysecret"`
 - [x] Connection password
 - [x] Clipboard sync
 - [x] Desktop app (Tauri via CI)
+- [x] Connection aliases (name instead of ID)
 - [ ] Mobile client
-- [ ] Connection aliases (name instead of ID)
 - [ ] H.264 hardware encoding (lower bandwidth)
 
 ## License

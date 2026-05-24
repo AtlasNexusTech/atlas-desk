@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>◆ Atlas Desk v0.4</title>
+<title>◆ Atlas Desk v0.7</title>
 <style>
 :root{--bg:#0a0a0f;--surface:#141423;--text:#e2e8f0;--muted:#64748b;--accent:#3b82f6;--accent2:#2563eb;--red:#ef4444;--green:#22c55e;--border:rgba(255,255,255,0.06);--radius:12px}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -80,7 +80,6 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   </div>
 </div>
 
-<!-- File panel -->
 <!-- Settings dialog -->
 <div class="dialog" id="settingsDialog">
   <div class="dialog-box">
@@ -118,7 +117,7 @@ let wasConnected = false;
 let savedAgentId = '';
 let pendingAgentId = null;
 let authToken = null;
-let hashedPassword = null; // SHA-256 of password, received from agent
+let hashedPassword = null;
 
 // ── UI ──
 function $(id) { return document.getElementById(id); }
@@ -158,7 +157,6 @@ async function connect() {
 
     switch (msg.type) {
       case 'auth_challenge':
-        // Agent requires password
         authToken = JSON.parse(msg.payload).token;
         $('passDialog').style.display = 'flex';
         $('passError').style.display = 'none';
@@ -197,7 +195,6 @@ async function connect() {
 
   ws.onclose = () => { 
     if (wasConnected) {
-      // Auto-reconnect
       status(`⚠️ Connection lost — reconnecting in 3s...`, 'var(--red)');
       reconnectTimer = setTimeout(() => {
         if (savedAgentId) {
@@ -222,7 +219,6 @@ async function submitPassword() {
 
   $('passDialog').style.display = 'none';
 
-  // Calculate proof: SHA256(SHA256(password) + token)
   const pwHash = await sha256(pass);
   const proof = await sha256(pwHash + authToken);
 
@@ -240,17 +236,16 @@ async function submitPassword() {
 async function handleOffer(msg, agentId) {
   pc = new RTCPeerConnection(config);
 
-  // Input channel
   const inputDC = pc.createDataChannel('input');
   _inputDC = inputDC;
   inputDC.onopen = () => status('⚡ P2P Ready', 'var(--green)');
 
-  // Receive screen + files
   pc.ondatachannel = (event) => {
     const dc = event.channel;
     if (dc.label === 'screen') {
       screenDC = dc;
       dc.onmessage = handleScreenFrame;
+      dc.binaryType = 'arraybuffer';
       dc.onopen = () => { overlay(false); wasConnected = true; status('⚡ Streaming', 'var(--green)'); };
     } else if (dc.label === 'files') {
       fileDC = dc;
@@ -285,36 +280,67 @@ async function handleOffer(msg, agentId) {
   status('Handshake...', 'var(--accent)');
 }
 
-// ── Screen Frame ──
+// ── Screen Frame (v1: full + diff encoding) ──
 function handleScreenFrame(event) {
   if (!(event.data instanceof ArrayBuffer)) return;
   const data = new Uint8Array(event.data);
   const view = new DataView(data.buffer);
   let offset = 0;
 
+  if (offset >= data.length) return;
+  const frameType = data[offset]; offset += 1;
+
   if (offset + 4 > data.length) return;
   const metaLen = view.getUint32(offset); offset += 4;
   if (offset + metaLen > data.length) return;
   const metaJSON = new TextDecoder().decode(data.slice(offset, offset + metaLen));
-  offset += metaLen;
-  if (offset + 4 > data.length) return;
-  const jpgLen = view.getUint32(offset); offset += 4;
-  if (offset + jpgLen > data.length) return;
-  const jpgData = data.slice(offset, offset + jpgLen);
   const meta = JSON.parse(metaJSON);
+  offset += metaLen;
 
-  const blob = new Blob([jpgData], { type: 'image/jpeg' });
-  const url = URL.createObjectURL(blob);
-  img.onload = () => {
-    canvas.width = meta.w;
-    canvas.height = meta.h;
-    ctx.drawImage(img, 0, 0);
-    URL.revokeObjectURL(url);
-  };
-  img.src = url;
+  if (frameType === 0x00) {
+    // Full frame
+    if (offset + 4 > data.length) return;
+    const jpgLen = view.getUint32(offset); offset += 4;
+    if (offset + jpgLen > data.length) return;
+    const jpgData = data.slice(offset, offset + jpgLen);
+    const blob = new Blob([jpgData], { type: 'image/jpeg' });
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      canvas.width = meta.w;
+      canvas.height = meta.h;
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  } else if (frameType === 0x01) {
+    // Diff frame — composite blocks
+    if (offset + 2 > data.length) return;
+    const numBlocks = view.getUint16(offset); offset += 2;
+    if (numBlocks === 0) return;
+    if (canvas.width !== meta.w || canvas.height !== meta.h) {
+      canvas.width = meta.w; canvas.height = meta.h;
+    }
+    for (let i = 0; i < numBlocks; i++) {
+      if (offset + 10 > data.length) break;
+      const bx = view.getUint16(offset); offset += 2;
+      const by = view.getUint16(offset); offset += 2;
+      const bw = view.getUint16(offset); offset += 2;
+      const bh = view.getUint16(offset); offset += 2;
+      const blen = view.getUint32(offset); offset += 4;
+      if (offset + blen > data.length) break;
+      const bdata = data.slice(offset, offset + blen);
+      offset += blen;
+      const bUrl = URL.createObjectURL(new Blob([bdata], { type: 'image/jpeg' }));
+      const bi = new Image();
+      bi.onload = (function(x,y,w,h,u) { return function() { ctx.drawImage(this, x, y, w, h); URL.revokeObjectURL(u); }; })(bx, by, bw, bh, bUrl);
+      bi.src = bUrl;
+    }
+  }
 
   if (meta.f % 150 === 0) {
-    status(`⚡ ${meta.w}x${meta.h}  ~${(event.data.byteLength/1024).toFixed(0)}KB`, 'var(--green)');
+    const kb = (event.data.byteLength / 1024).toFixed(1);
+    const type = frameType === 0x00 ? 'FULL' : 'DIFF';
+    status(`⚡ ${meta.w}x${meta.h} ${type} ~${kb}KB`, 'var(--green)');
   }
 }
 
@@ -366,7 +392,6 @@ function handleFileMsg(event) {
     if (msg.type === 'file_end') addFileEntry(msg.name, 0, 'received ✅');
     return;
   }
-  // Binary not fully parsed on client receive for brevity
 }
 
 function addFileEntry(name, size, st) {
@@ -397,7 +422,6 @@ document.addEventListener('keydown', (e) => { if (!_inputDC || _inputDC.readySta
 function handleClipboardMsg(event) {
   const msg = JSON.parse(event.data);
   if (msg.type === 'clipboard' && msg.text) {
-    // Auto-copy to local clipboard
     navigator.clipboard.writeText(msg.text).then(() => {
       status(`📋 Copied: ${msg.text.substring(0, 40)}...`, 'var(--accent)');
       setTimeout(() => status('⚡ Streaming', 'var(--green)'), 2000);

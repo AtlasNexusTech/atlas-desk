@@ -1,8 +1,7 @@
-// Atlas Desk Agent v0.4 — TURN support + connection password + improved config
+// Atlas Desk Agent v0.7 — Tray icon + auto-reconnect + aliases + settings
 package main
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
@@ -11,7 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"image"
-	"image/jpeg"
 	"log"
 	"math/big"
 	"os"
@@ -138,7 +136,7 @@ func main() {
 
 	cfg := loadConfig()
 
-	log.Printf("◆ Atlas Desk Agent v0.6  ID: %s", cfg.ID)
+	log.Printf("◆ Atlas Desk Agent v0.7  ID: %s", cfg.ID)
 	if cfg.Alias != "" {
 		log.Printf("   Alias: %s", cfg.Alias)
 	}
@@ -396,31 +394,23 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 		}
 	}()
 
-	// Frame capture loop
+	// Frame capture loop with diff encoding
 	ticker := time.NewTicker(time.Second / time.Duration(*fps))
 	defer ticker.Stop()
 
+	encoder := NewDiffEncoder(*jpegQuality)
 	var frameCount uint64
+
 	for range ticker.C {
 		img, err := screenshot.CaptureRect(bounds)
 		if err != nil {
 			continue
 		}
 
-		var jpgBuf bytes.Buffer
-		jpeg.Encode(&jpgBuf, img, &jpeg.Options{Quality: *jpegQuality})
-
-		meta := FrameMeta{W: bounds.Dx(), H: bounds.Dy(), Frame: frameCount}
-		metaJSON, _ := json.Marshal(meta)
-
-		var pkt bytes.Buffer
-		binary.Write(&pkt, binary.BigEndian, uint32(len(metaJSON)))
-		pkt.Write(metaJSON)
-		binary.Write(&pkt, binary.BigEndian, uint32(jpgBuf.Len()))
-		pkt.Write(jpgBuf.Bytes())
+		pkt := encoder.EncodeDiff(img, bounds, frameCount)
 
 		if gotScreen != nil && gotScreen.ReadyState() == webrtc.DataChannelStateOpen {
-			gotScreen.Send(pkt.Bytes())
+			gotScreen.Send(pkt)
 		}
 		frameCount++
 	}

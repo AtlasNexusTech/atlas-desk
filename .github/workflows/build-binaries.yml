@@ -1,0 +1,120 @@
+name: Build & Release Go Binaries
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build-agent:
+    name: Agent (${{ matrix.os }})
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            ext: ""
+            artifact: atlas-desk-agent-linux-amd64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            ext: ".exe"
+            artifact: atlas-desk-agent-windows-amd64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build agent
+        run: |
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o atlas-desk-agent${{ matrix.ext }} .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: agent/atlas-desk-agent${{ matrix.ext }}
+
+  build-signaling:
+    name: Signaling (${{ matrix.os }})
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            ext: ""
+            artifact: atlas-desk-signaling-linux-amd64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            ext: ".exe"
+            artifact: atlas-desk-signaling-windows-amd64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: signaling
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build signaling
+        run: |
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o atlas-desk-signaling${{ matrix.ext }} .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: signaling/atlas-desk-signaling${{ matrix.ext }}
+
+  release:
+    name: Create Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-agent, build-signaling]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package binaries
+        run: |
+          cd artifacts
+          # Linux agent
+          cp atlas-desk-agent-linux-amd64/atlas-desk-agent atlas-desk-agent-linux
+          tar czf atlas-desk-agent-linux-amd64.tar.gz atlas-desk-agent-linux
+          # Windows agent
+          cp atlas-desk-agent-windows-amd64/atlas-desk-agent.exe .
+          zip atlas-desk-agent-windows-amd64.zip atlas-desk-agent.exe
+          # Linux signaling
+          cp atlas-desk-signaling-linux-amd64/atlas-desk-signaling atlas-desk-signaling-linux
+          tar czf atlas-desk-signaling-linux-amd64.tar.gz atlas-desk-signaling-linux
+          # Windows signaling
+          cp atlas-desk-signaling-windows-amd64/atlas-desk-signaling.exe .
+          zip atlas-desk-signaling-windows-amd64.zip atlas-desk-signaling.exe
+          # Show files
+          ls -lh *.tar.gz *.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/atlas-desk-agent-linux-amd64.tar.gz
+            artifacts/atlas-desk-agent-windows-amd64.zip
+            artifacts/atlas-desk-signaling-linux-amd64.tar.gz
+            artifacts/atlas-desk-signaling-windows-amd64.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
