@@ -2,19 +2,20 @@
 
 **P2P remote desktop with WebRTC.** No servers routing your video. Free. Open source.
 
-## v0.3 — JPEG Streaming + Numeric IDs + File Transfer
+## v0.4 — TURN Support + Connection Password + Config File
 
 | Feature | Status |
 |---------|--------|
 | P2P WebRTC (STUN) | ✅ |
+| TURN server (NAT fallback) | ✅ Configurable via `~/.atlas-desk/config.json` |
 | JPEG screen streaming | ✅ 15 FPS, Q65 |
 | Mouse/keyboard control | ✅ Cross-platform |
 | Numeric 9-digit IDs | ✅ AnyDesk-style |
 | File transfer | ✅ Bidirectional |
-| Clipboard sync | ❌ |
-| TURN server (NAT fallback) | ❌ |
-| Connection password | ❌ |
+| Connection password | ✅ SHA-256 challenge-response |
 | Encrypted sessions | ✅ WebRTC DTLS |
+| Clipboard sync | ❌ |
+| Desktop app | ❌ |
 
 ## Architecture
 
@@ -51,6 +52,23 @@ go run . -signal ws://YOUR_SIGNAL_IP:8800/ws
 ### 3. Client (your PC)
 Open `client/index.html` in a browser, enter the agent's 9-digit ID, click Connect.
 
+### TURN Server (optional but recommended)
+Edit `~/.atlas-desk/config.json` on the agent:
+```json
+{
+  "id": "437192805",
+  "password": "sha256hash...",
+  "turn_servers": [
+    {
+      "urls": ["turn:your-turn-server.com:3478?transport=udp"],
+      "username": "your-username",
+      "credential": "your-credential"
+    }
+  ]
+}
+```
+Set password via CLI: `./atlas-desk-agent -pass "mysecret"`
+
 ## Data Channels
 
 | Channel | Direction | Protocol |
@@ -61,12 +79,13 @@ Open `client/index.html` in a browser, enter the agent's 9-digit ID, click Conne
 
 ## Roadmap
 
-- [ ] TURN server for restrictive NATs
+- [x] TURN server for restrictive NATs
+- [x] Connection password
 - [ ] H.264 hardware encoding (lower bandwidth)
 - [ ] Clipboard sync
-- [ ] Connection password
-- [ ] Desktop app (Electron/Tauri)
+- [ ] Desktop app (Tauri — cross-platform)
 - [ ] Mobile client
+- [ ] Connection aliases (name instead of ID)
 
 ## License
 
