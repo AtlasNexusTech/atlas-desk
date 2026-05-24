@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Atlas Desk — Remote Desktop</title>
+<title>◆ Atlas Desk — Remote Desktop</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0a0a0f;color:#fff;font-family:system-ui,sans-serif;overflow:hidden;height:100vh}
@@ -15,9 +15,8 @@ body{background:#0a0a0f;color:#fff;font-family:system-ui,sans-serif;overflow:hid
 #toolbar button.disconnect{background:#dc2626}
 #status{font-size:12px;color:#94a3b8;margin-left:4px}
 #screen{width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;background:#000}
-#screen img{max-width:100%;max-height:100%;object-fit:contain}
-#screen canvas{display:none}
-.connecting{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);z-index:5}
+#screen video{max-width:100%;max-height:100%;object-fit:contain}
+#connecting{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);z-index:5}
 .spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,0.1);border-top-color:#2563EB;border-radius:50%;animation:spin 0.8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
@@ -25,7 +24,7 @@ body{background:#0a0a0f;color:#fff;font-family:system-ui,sans-serif;overflow:hid
 <body>
 
 <div id="toolbar">
-  <span style="font-weight:700;font-size:14px">⬡ Atlas Desk</span>
+  <span style="font-weight:700;font-size:14px">◆ Atlas Desk</span>
   <input id="agentId" placeholder="Agent ID" value="">
   <button id="connectBtn" onclick="connect()">Connect</button>
   <button class="disconnect" id="disconnectBtn" onclick="disconnect()" style="display:none">Disconnect</button>
@@ -33,110 +32,135 @@ body{background:#0a0a0f;color:#fff;font-family:system-ui,sans-serif;overflow:hid
 </div>
 
 <div id="screen">
-  <img id="frame" alt="Remote screen">
+  <video id="remoteVideo" autoplay playsinline muted></video>
 </div>
 
-<div id="connectingOverlay" class="connecting" style="display:none">
+<div id="connecting">
   <div style="text-align:center">
     <div class="spinner"></div>
-    <p style="margin-top:16px;color:#94a3b8;font-size:14px">Connecting...</p>
+    <p style="margin-top:16px;color:#94a3b8;font-size:14px">Connecting via P2P...</p>
   </div>
 </div>
 
 <script>
-let ws, connected = false;
+let ws, pc, dc, myId = 'viewer-' + Date.now();
 const SIGNAL = 'ws://localhost:8800/ws';
+const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-function setStatus(s) { document.getElementById('status').textContent = s; }
-function showOverlay(s) {
-  const el = document.getElementById('connectingOverlay');
-  el.style.display = s ? 'flex' : 'none';
-}
+function status(s) { document.getElementById('status').textContent = s; }
+function overlay(s) { document.getElementById('connecting').style.display = s ? 'flex' : 'none'; }
 
 async function connect() {
   const agentId = document.getElementById('agentId').value.trim();
   if (!agentId) return alert('Enter Agent ID');
-
-  showOverlay(true);
-  setStatus('Connecting...');
+  overlay(true); status('Signaling...');
 
   ws = new WebSocket(SIGNAL);
   ws.onopen = () => {
-    ws.send(JSON.stringify({
-      type: 'register',
-      payload: { id: 'viewer-' + Date.now(), role: 'client' },
-      target: agentId
-    }));
-    setStatus('Registered');
+    ws.send(JSON.stringify({ type: 'register', payload: { id: myId, role: 'client' }, target: agentId }));
+    status('Registered — awaiting P2P');
   };
 
   ws.onmessage = async (e) => {
     const msg = JSON.parse(e.data);
     switch (msg.type) {
-      case 'frame':
-        const frame = JSON.parse(msg.payload);
-        const img = document.getElementById('frame');
-        const blob = new Blob([new Uint8Array(frame.data)], {type:'image/png'});
-        img.src = URL.createObjectURL(blob);
-        showOverlay(false);
-        setStatus('Streaming');
+      case 'offer':
+        await handleOffer(msg, agentId);
         break;
-      case 'pong':
+      case 'ice_candidate':
+        if (pc && msg.payload) {
+          const ice = JSON.parse(msg.payload);
+          pc.addIceCandidate(new RTCIceCandidate(ice));
+        }
         break;
     }
   };
 
-  ws.onclose = () => {
-    setStatus('Disconnected');
-    showOverlay(false);
-    document.getElementById('connectBtn').style.display = '';
-    document.getElementById('disconnectBtn').style.display = 'none';
-  };
-
-  ws.onerror = () => setStatus('Error');
+  ws.onclose = () => { status('Disconnected'); overlay(false); };
+  ws.onerror = () => status('Signal error');
 
   document.getElementById('connectBtn').style.display = 'none';
   document.getElementById('disconnectBtn').style.display = '';
 }
 
-function disconnect() {
-  if (ws) ws.close();
-  ws = null;
+async function handleOffer(msg, agentId) {
+  pc = new RTCPeerConnection(config);
+
+  pc.ontrack = (event) => {
+    document.getElementById('remoteVideo').srcObject = event.streams[0];
+    overlay(false); status('⚡ P2P Streaming');
+  };
+
+  // Data channel for input
+  dc = pc.createDataChannel('input');
+  dc.onopen = () => status('⚡ P2P Connected');
+
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      ws.send(JSON.stringify({
+        type: 'ice_candidate', target: agentId,
+        payload: JSON.stringify({ candidate: e.candidate.candidate, sdpMid: e.candidate.sdpMid })
+      }));
+    }
+  };
+
+  const offer = JSON.parse(msg.payload);
+  await pc.setRemoteDescription(new RTCSessionDescription(offer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  ws.send(JSON.stringify({
+    type: 'answer', target: agentId,
+    payload: JSON.stringify({ sdp: answer.sdp, type: 'answer' })
+  }));
+
+  status('P2P handshake...');
 }
 
-// Mouse & keyboard forwarding
-document.getElementById('screen').addEventListener('mousemove', (e) => {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  const img = document.getElementById('frame');
-  const rect = img.getBoundingClientRect();
-  const scaleX = img.naturalWidth / rect.width;
-  const scaleY = img.naturalHeight / rect.height;
-  const x = Math.round((e.clientX - rect.left) * scaleX);
-  const y = Math.round((e.clientY - rect.top) * scaleY);
-  ws.send(JSON.stringify({
-    type: 'input',
-    target: document.getElementById('agentId').value.trim(),
-    payload: JSON.stringify({ action: 'mouse_move', x, y })
-  }));
+function disconnect() {
+  if (dc) dc.close();
+  if (pc) pc.close();
+  if (ws) ws.close();
+  pc = null; dc = null; ws = null;
+  document.getElementById('connectBtn').style.display = '';
+  document.getElementById('disconnectBtn').style.display = 'none';
+  document.getElementById('remoteVideo').srcObject = null;
+  status('Idle');
+}
+
+// Input forwarding via data channel
+const video = document.getElementById('remoteVideo');
+
+video.addEventListener('mousemove', (e) => {
+  if (!dc || dc.readyState !== 'open') return;
+  const rect = video.getBoundingClientRect();
+  const scaleX = video.videoWidth / rect.width;
+  const scaleY = video.videoHeight / rect.height;
+  dc.send(JSON.stringify({ action: 'mouse_move', x: Math.round((e.clientX - rect.left) * scaleX), y: Math.round((e.clientY - rect.top) * scaleY) }));
 });
 
-document.getElementById('screen').addEventListener('click', (e) => {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({
-    type: 'input',
-    target: document.getElementById('agentId').value.trim(),
-    payload: JSON.stringify({ action: 'mouse_click', button: 'left' })
-  }));
+video.addEventListener('click', () => {
+  if (!dc || dc.readyState !== 'open') return;
+  dc.send(JSON.stringify({ action: 'mouse_click', button: 'left' }));
+});
+
+video.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  if (!dc || dc.readyState !== 'open') return;
+  dc.send(JSON.stringify({ action: 'mouse_click', button: 'right' }));
+});
+
+video.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (!dc || dc.readyState !== 'open') return;
+  dc.send(JSON.stringify({ action: 'scroll', dy: e.deltaY > 0 ? 1 : -1 }));
 });
 
 document.addEventListener('keydown', (e) => {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!dc || dc.readyState !== 'open') return;
   if (e.target.tagName === 'INPUT') return;
-  ws.send(JSON.stringify({
-    type: 'input',
-    target: document.getElementById('agentId').value.trim(),
-    payload: JSON.stringify({ action: 'key', key: e.key })
-  }));
+  e.preventDefault();
+  dc.send(JSON.stringify({ action: 'key', key: e.key }));
 });
 </script>
 </body>
