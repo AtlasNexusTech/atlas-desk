@@ -3,62 +3,101 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>◆ Atlas Desk — Remote Desktop</title>
+<title>◆ Atlas Desk v0.3</title>
 <style>
+:root{--bg:#0a0a0f;--surface:#141423;--text:#e2e8f0;--muted:#64748b;--accent:#3b82f6;--accent2:#2563eb;--red:#ef4444;--green:#22c55e;--border:rgba(255,255,255,0.06);--radius:12px}
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a0f;color:#fff;font-family:system-ui,sans-serif;overflow:hidden;height:100vh}
-#toolbar{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:8px;align-items:center;background:rgba(20,20,35,0.85);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.08);border-radius:40px;padding:6px 16px}
-#toolbar input,#toolbar button{padding:8px 14px;border-radius:20px;border:none;font-size:13px;outline:none}
-#toolbar input{background:rgba(255,255,255,0.06);color:#fff;width:140px;text-align:center}
-#toolbar button{background:#2563EB;color:#fff;cursor:pointer;font-weight:600}
-#toolbar button:hover{background:#1d4ed8}
-#toolbar button.disconnect{background:#dc2626}
-#status{font-size:12px;color:#94a3b8;margin-left:4px}
-#screen{width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;background:#000}
-#screen video{max-width:100%;max-height:100%;object-fit:contain}
-#connecting{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);z-index:5}
-.spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,0.1);border-top-color:#2563EB;border-radius:50%;animation:spin 0.8s linear infinite}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+
+/* Top bar */
+#topbar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);z-index:10;flex-shrink:0}
+#topbar .logo{font-weight:800;font-size:15px;white-space:nowrap;background:linear-gradient(135deg,var(--accent),#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#topbar input{flex:1;max-width:180px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text);font-size:13px;text-align:center;outline:none;font-family:monospace}
+#topbar input:focus{border-color:var(--accent)}
+#topbar button{padding:8px 16px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s}
+.btn-connect{background:var(--accent);color:#fff}
+.btn-connect:hover{background:var(--accent2)}
+.btn-disconnect{background:var(--red);color:#fff}
+.btn-file{background:rgba(255,255,255,0.06);color:var(--text);font-size:20px;padding:6px 12px;line-height:1}
+#status{font-size:12px;color:var(--muted);white-space:nowrap}
+
+/* Screen area */
+#viewport{flex:1;display:flex;align-items:center;justify-content:center;background:#000;position:relative;cursor:crosshair}
+#canvas{max-width:100%;max-height:100%}
+
+/* Overlay */
+#overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);z-index:5}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* File panel */
+#filePanel{position:fixed;bottom:16px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;width:260px;display:none;z-index:20}
+#filePanel h3{font-size:13px;margin-bottom:8px;color:var(--muted)}
+#filePanel .file-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px}
+#filePanel .file-row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
+#filePanel .file-row .size{color:var(--muted);font-family:monospace}
 </style>
 </head>
 <body>
 
-<div id="toolbar">
-  <span style="font-weight:700;font-size:14px">◆ Atlas Desk</span>
-  <input id="agentId" placeholder="Agent ID" value="">
-  <button id="connectBtn" onclick="connect()">Connect</button>
-  <button class="disconnect" id="disconnectBtn" onclick="disconnect()" style="display:none">Disconnect</button>
+<div id="topbar">
+  <span class="logo">◆ Atlas Desk</span>
+  <input id="agentId" placeholder="000 000 000" maxlength="12" autocomplete="off">
+  <button class="btn-connect" id="connectBtn" onclick="connect()">Connect</button>
+  <button class="btn-disconnect" id="disconnectBtn" onclick="disconnect()" style="display:none">✕</button>
+  <button class="btn-file" id="fileBtn" onclick="toggleFiles()" style="display:none" title="File Transfer">📁</button>
   <span id="status">Idle</span>
 </div>
 
-<div id="screen">
-  <video id="remoteVideo" autoplay playsinline muted></video>
+<div id="viewport">
+  <canvas id="canvas"></canvas>
 </div>
 
-<div id="connecting">
+<div id="overlay">
   <div style="text-align:center">
     <div class="spinner"></div>
-    <p style="margin-top:16px;color:#94a3b8;font-size:14px">Connecting via P2P...</p>
+    <p style="margin-top:12px;color:var(--muted);font-size:13px">P2P handshake...</p>
   </div>
 </div>
 
+<div id="filePanel">
+  <h3>📁 Files</h3>
+  <div id="fileList" style="max-height:200px;overflow-y:auto;margin-bottom:8px"></div>
+  <input type="file" id="fileInput" onchange="sendFile()" style="display:none">
+  <button onclick="document.getElementById('fileInput').click()" style="width:100%;padding:6px;border-radius:6px;border:1px dashed var(--border);background:none;color:var(--muted);cursor:pointer;font-size:12px">+ Send File to Agent</button>
+</div>
+
 <script>
-let ws, pc, dc, myId = 'viewer-' + Date.now();
+// ── State ──
+let ws, pc, screenDC, fileDC, myId = 'viewer-' + Date.now().toString(36);
+let canvas = document.getElementById('canvas');
+let ctx = canvas.getContext('2d');
 const SIGNAL = 'ws://localhost:8800/ws';
 const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const remoteFiles = new Map(); // filename -> {size, status}
+let img = new Image();
 
-function status(s) { document.getElementById('status').textContent = s; }
-function overlay(s) { document.getElementById('connecting').style.display = s ? 'flex' : 'none'; }
+function $(id) { return document.getElementById(id); }
 
+// ── UI Helpers ──
+function status(s, color) {
+  const el = $('status');
+  el.textContent = s;
+  if (color) el.style.color = color;
+}
+function overlay(show) { $('overlay').style.display = show ? 'flex' : 'none'; }
+
+// ── Connect ──
 async function connect() {
-  const agentId = document.getElementById('agentId').value.trim();
+  const agentId = $('agentId').value.replace(/\s/g, '');
   if (!agentId) return alert('Enter Agent ID');
-  overlay(true); status('Signaling...');
+
+  overlay(true); status('Signaling...', 'var(--muted)');
 
   ws = new WebSocket(SIGNAL);
   ws.onopen = () => {
     ws.send(JSON.stringify({ type: 'register', payload: { id: myId, role: 'client' }, target: agentId }));
-    status('Registered — awaiting P2P');
+    status('Awaiting P2P...', 'var(--accent)');
   };
 
   ws.onmessage = async (e) => {
@@ -76,25 +115,40 @@ async function connect() {
     }
   };
 
-  ws.onclose = () => { status('Disconnected'); overlay(false); };
-  ws.onerror = () => status('Signal error');
+  ws.onclose = () => { status('Disconnected', 'var(--red)'); overlay(false); };
+  ws.onerror = () => status('Signal error', 'var(--red)');
 
-  document.getElementById('connectBtn').style.display = 'none';
-  document.getElementById('disconnectBtn').style.display = '';
+  $('connectBtn').style.display = 'none';
+  $('disconnectBtn').style.display = '';
 }
 
 async function handleOffer(msg, agentId) {
   pc = new RTCPeerConnection(config);
 
-  pc.ontrack = (event) => {
-    document.getElementById('remoteVideo').srcObject = event.streams[0];
-    overlay(false); status('⚡ P2P Streaming');
+  // ── Data channels ──
+  // "input" — we create (client → agent)
+  // "screen" — agent creates (agent → client)
+  // "files" — agent creates (bidirectional)
+
+  // Input channel
+  const inputDC = pc.createDataChannel('input');
+  inputDC.onopen = () => status('⚡ P2P Ready', 'var(--green)');
+
+  // Receive screen + files channels from agent
+  pc.ondatachannel = (event) => {
+    const dc = event.channel;
+    if (dc.label === 'screen') {
+      screenDC = dc;
+      dc.onmessage = handleScreenFrame;
+      dc.onopen = () => { overlay(false); status('⚡ Streaming', 'var(--green)'); };
+    } else if (dc.label === 'files') {
+      fileDC = dc;
+      dc.onmessage = handleFileMsg;
+      dc.onopen = () => { $('fileBtn').style.display = ''; };
+    }
   };
 
-  // Data channel for input
-  dc = pc.createDataChannel('input');
-  dc.onopen = () => status('⚡ P2P Connected');
-
+  // ICE relay
   pc.onicecandidate = (e) => {
     if (e.candidate) {
       ws.send(JSON.stringify({
@@ -104,6 +158,7 @@ async function handleOffer(msg, agentId) {
     }
   };
 
+  // Set remote + create answer
   const offer = JSON.parse(msg.payload);
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
   const answer = await pc.createAnswer();
@@ -114,54 +169,236 @@ async function handleOffer(msg, agentId) {
     payload: JSON.stringify({ sdp: answer.sdp, type: 'answer' })
   }));
 
-  status('P2P handshake...');
+  status('Handshake...', 'var(--accent)');
 }
 
-function disconnect() {
-  if (dc) dc.close();
-  if (pc) pc.close();
-  if (ws) ws.close();
-  pc = null; dc = null; ws = null;
-  document.getElementById('connectBtn').style.display = '';
-  document.getElementById('disconnectBtn').style.display = 'none';
-  document.getElementById('remoteVideo').srcObject = null;
-  status('Idle');
+// ── Screen Frame Handler ──
+// Protocol: [4B metaLen][JSON meta][4B jpgLen][JPEG data]
+function handleScreenFrame(event) {
+  if (!(event.data instanceof ArrayBuffer)) return;
+
+  const data = new Uint8Array(event.data);
+  const view = new DataView(data.buffer);
+  let offset = 0;
+
+  if (offset + 4 > data.length) return;
+  const metaLen = view.getUint32(offset); offset += 4;
+
+  if (offset + metaLen > data.length) return;
+  const metaJSON = new TextDecoder().decode(data.slice(offset, offset + metaLen));
+  offset += metaLen;
+
+  if (offset + 4 > data.length) return;
+  const jpgLen = view.getUint32(offset); offset += 4;
+
+  if (offset + jpgLen > data.length) return;
+  const jpgData = data.slice(offset, offset + jpgLen);
+
+  const meta = JSON.parse(metaJSON);
+
+  // Render to canvas
+  const blob = new Blob([jpgData], { type: 'image/jpeg' });
+  const url = URL.createObjectURL(blob);
+
+  img.onload = () => {
+    canvas.width = meta.w;
+    canvas.height = meta.h;
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+
+  // Update status periodically
+  if (meta.f % 150 === 0) {
+    const kb = (event.data.byteLength / 1024).toFixed(0);
+    status(`⚡ Streaming  ${meta.w}x${meta.h}  ~${kb}KB/frame`, 'var(--green)');
+  }
 }
 
-// Input forwarding via data channel
-const video = document.getElementById('remoteVideo');
+// ── File Transfer ──
+function toggleFiles() {
+  const panel = $('filePanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
 
-video.addEventListener('mousemove', (e) => {
-  if (!dc || dc.readyState !== 'open') return;
-  const rect = video.getBoundingClientRect();
-  const scaleX = video.videoWidth / rect.width;
-  const scaleY = video.videoHeight / rect.height;
-  dc.send(JSON.stringify({ action: 'mouse_move', x: Math.round((e.clientX - rect.left) * scaleX), y: Math.round((e.clientY - rect.top) * scaleY) }));
+function sendFile() {
+  const input = $('fileInput');
+  const file = input.files[0];
+  if (!file || !fileDC || fileDC.readyState !== 'open') return;
+
+  const fileId = crypto.randomUUID();
+  const startMsg = JSON.stringify({ type: 'file_start', name: file.name, size: file.size, id: fileId });
+  sendFileBinary(startMsg, new Uint8Array(0), fileId, 0);
+
+  const CHUNK = 16 * 1024;
+  let offset = 0;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const chunk = new Uint8Array(reader.result);
+    const meta = JSON.stringify({ type: 'file_chunk', id: fileId, offset: offset });
+
+    // [4B metaLen][JSON][chunk data]
+    const metaBytes = new TextEncoder().encode(meta);
+    const pkt = new Uint8Array(4 + metaBytes.length + chunk.length);
+    const v = new DataView(pkt.buffer);
+    v.setUint32(0, metaBytes.length);
+    pkt.set(metaBytes, 4);
+    pkt.set(chunk, 4 + metaBytes.length);
+    fileDC.send(pkt.buffer);
+
+    offset += chunk.length;
+    if (offset < file.size) {
+      readChunk();
+    } else {
+      fileDC.send(JSON.stringify({ type: 'file_end', id: fileId, name: file.name }));
+      addFileEntry(file.name, file.size, 'sent');
+      status(`✅ Sent: ${file.name}`, 'var(--green)');
+    }
+  };
+
+  function readChunk() {
+    const slice = file.slice(offset, offset + CHUNK);
+    reader.readAsArrayBuffer(slice);
+  }
+
+  addFileEntry(file.name, file.size, 'sending...');
+  readChunk();
+  input.value = '';
+}
+
+function sendFileBinary(metaObj, data, id, offset) {
+  const meta = JSON.stringify(metaObj);
+  const metaBytes = new TextEncoder().encode(meta);
+  const pkt = new Uint8Array(4 + metaBytes.length + data.length);
+  const v = new DataView(pkt.buffer);
+  v.setUint32(0, metaBytes.length);
+  pkt.set(metaBytes, 4);
+  pkt.set(data, 4 + metaBytes.length);
+  fileDC.send(pkt.buffer);
+}
+
+function handleFileMsg(event) {
+  if (typeof event.data === 'string') {
+    // Text message (file_end, etc.)
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'file_end') {
+      addFileEntry(msg.name, 0, 'received ✅');
+    }
+    return;
+  }
+
+  // Binary: [4B metaLen][JSON][data]
+  const data = new Uint8Array(event.data);
+  const view = new DataView(data.buffer);
+  let offset = 0;
+
+  if (offset + 4 > data.length) return;
+  const metaLen = view.getUint32(offset); offset += 4;
+
+  if (offset + metaLen > data.length) return;
+  const metaJSON = new TextDecoder().decode(data.slice(offset, offset + metaLen));
+  offset += metaLen;
+
+  const payload = data.slice(offset);
+  const meta = JSON.parse(metaJSON);
+
+  if (meta.type === 'file_start') {
+    addFileEntry(meta.name, meta.size, 'receiving...');
+  }
+}
+
+function addFileEntry(name, size, status) {
+  remoteFiles.set(name, { size, status });
+  renderFileList();
+}
+
+function renderFileList() {
+  const list = $('fileList');
+  list.innerHTML = '';
+  for (const [name, info] of remoteFiles) {
+    const kb = info.size > 0 ? (info.size / 1024).toFixed(1) + ' KB' : '';
+    list.innerHTML += `<div class="file-row">
+      <span class="name" title="${name}">${name}</span>
+      <span class="size">${kb} ${info.status}</span>
+    </div>`;
+  }
+}
+
+// ── Input forwarding ──
+canvas.addEventListener('mousemove', (e) => {
+  if (!inputDC()) return;
+  const rect = canvas.getBoundingClientRect();
+  const sx = canvas.width / rect.width;
+  const sy = canvas.height / rect.height;
+  inputDC().send(JSON.stringify({
+    action: 'mouse_move',
+    x: Math.round((e.clientX - rect.left) * sx),
+    y: Math.round((e.clientY - rect.top) * sy)
+  }));
 });
 
-video.addEventListener('click', () => {
-  if (!dc || dc.readyState !== 'open') return;
-  dc.send(JSON.stringify({ action: 'mouse_click', button: 'left' }));
+canvas.addEventListener('click', () => {
+  if (!inputDC()) return;
+  inputDC().send(JSON.stringify({ action: 'mouse_click', button: 'left' }));
 });
 
-video.addEventListener('contextmenu', (e) => {
+canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault();
-  if (!dc || dc.readyState !== 'open') return;
-  dc.send(JSON.stringify({ action: 'mouse_click', button: 'right' }));
+  if (!inputDC()) return;
+  inputDC().send(JSON.stringify({ action: 'mouse_click', button: 'right' }));
 });
 
-video.addEventListener('wheel', (e) => {
+canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
-  if (!dc || dc.readyState !== 'open') return;
-  dc.send(JSON.stringify({ action: 'scroll', dy: e.deltaY > 0 ? 1 : -1 }));
+  if (!inputDC()) return;
+  inputDC().send(JSON.stringify({ action: 'scroll', dy: e.deltaY > 0 ? 1 : -1 }));
 });
 
 document.addEventListener('keydown', (e) => {
-  if (!dc || dc.readyState !== 'open') return;
+  if (!inputDC()) return;
   if (e.target.tagName === 'INPUT') return;
   e.preventDefault();
-  dc.send(JSON.stringify({ action: 'key', key: e.key }));
+  inputDC().send(JSON.stringify({ action: 'key', key: e.key }));
 });
+
+function inputDC() {
+  // Find the "input" data channel
+  if (!pc) return null;
+  // We created it, so it's in pc's data channels
+  for (const dc of pc.sctp?.transport?.dataChannels || []) {
+    // This won't work directly... let's store it
+  }
+  return _inputDC;
+}
+let _inputDC = null;
+
+// Patch: store input DC on creation
+const origCreateDataChannel = RTCPeerConnection.prototype.createDataChannel;
+RTCPeerConnection.prototype.createDataChannel = function(label, opts) {
+  const dc = origCreateDataChannel.call(this, label, opts);
+  if (label === 'input') _inputDC = dc;
+  return dc;
+};
+
+// ── Disconnect ──
+function disconnect() {
+  if (_inputDC) _inputDC.close();
+  if (screenDC) screenDC.close();
+  if (fileDC) fileDC.close();
+  if (pc) pc.close();
+  if (ws) ws.close();
+  _inputDC = null; screenDC = null; fileDC = null; pc = null; ws = null;
+  img = new Image();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  $('connectBtn').style.display = '';
+  $('disconnectBtn').style.display = 'none';
+  $('fileBtn').style.display = 'none';
+  $('filePanel').style.display = 'none';
+  remoteFiles.clear();
+  renderFileList();
+  status('Idle');
+}
 </script>
 </body>
 </html>

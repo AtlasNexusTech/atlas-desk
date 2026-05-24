@@ -1,70 +1,73 @@
-# ◆ Atlas Desk — Open Source Remote Desktop
+# ◆ Atlas Desk — Open-Source Remote Desktop (AnyDesk Alternative)
 
-Lightweight AnyDesk alternative. Binary agent on the host PC, web-based viewer (zero install).
+**P2P remote desktop with WebRTC.** No servers routing your video. Free. Open source.
+
+## v0.3 — JPEG Streaming + Numeric IDs + File Transfer
+
+| Feature | Status |
+|---------|--------|
+| P2P WebRTC (STUN) | ✅ |
+| JPEG screen streaming | ✅ 15 FPS, Q65 |
+| Mouse/keyboard control | ✅ Cross-platform |
+| Numeric 9-digit IDs | ✅ AnyDesk-style |
+| File transfer | ✅ Bidirectional |
+| Clipboard sync | ❌ |
+| TURN server (NAT fallback) | ❌ |
+| Connection password | ❌ |
+| Encrypted sessions | ✅ WebRTC DTLS |
 
 ## Architecture
 
 ```
-┌─────────────┐     WebSocket      ┌──────────────┐     WebSocket      ┌──────────────┐
-│  Agent (Go) │ ◄──────────────► │  Signaling    │ ◄──────────────► │  Client (Web)│
-│  Screen cap  │                   │  Server (Go)  │                   │  Browser      │
-│  Input sim   │                   │  Port :8800    │                   │  HTML5        │
-└─────────────┘                   └──────────────┘                   └──────────────┘
+┌──────────────┐         WebRTC P2P         ┌──────────────┐
+│   Agent      │◄──────────────────────────►│   Client      │
+│  (Go binary) │   screen: JPEG frames      │  (Web browser) │
+│              │   input: mouse/keyboard    │               │
+│  Linux/Win   │   files: file transfer     │  Zero install  │
+└──────┬───────┘                            └───────────────┘
+       │ WebSocket (signaling only)
+       ▼
+┌──────────────┐
+│  Signaling   │  Go + Gorilla WebSocket
+│   Server     │  Relays SDP/ICE only
+└──────────────┘
 ```
 
 ## Quick Start
 
+### 1. Signaling Server
 ```bash
-# 1. Start signaling server (any machine)
-cd signaling && go run main.go
-# → Listening on :8800
-
-# 2. Start agent on target PC
-# Linux:
-cd agent && go run main.go -signal ws://SIGNAL_IP:8800/ws
-# Windows:
-cd agent && go build -o atlas-desk-agent.exe . && atlas-desk-agent.exe -signal ws://SIGNAL_IP:8800/ws
-
-# 3. Open client in browser
-open client/index.html
-# Enter Agent ID (hostname), click Connect
+cd signaling
+go run main.go -addr :8800
 ```
 
-## Build
-
+### 2. Agent (remote PC)
 ```bash
-# Signaling server (Linux/Windows/Mac)
-cd signaling && go build -o atlas-desk-signaling .
-
-# Agent — Linux (requires xdotool: apt install xdotool)
-cd agent && go build -o atlas-desk-agent .
-
-# Agent — Windows (native WinAPI, zero deps)
-cd agent && GOOS=windows go build -o atlas-desk-agent.exe .
+cd agent
+go run . -signal ws://YOUR_SIGNAL_IP:8800/ws
+# Shows 9-digit ID on first run
 ```
 
-## Protocol
+### 3. Client (your PC)
+Open `client/index.html` in a browser, enter the agent's 9-digit ID, click Connect.
 
-| Message | Direction | Purpose |
-|---------|-----------|---------|
-| `register` | Both → Signal | Register as agent or client |
-| `client_hello` | Signal → Agent | Viewer wants to connect |
-| `frame` | Agent → Client | PNG screen frame |
-| `input` | Client → Agent | Mouse/keyboard events |
+## Data Channels
+
+| Channel | Direction | Protocol |
+|---------|-----------|----------|
+| `screen` | Agent → Client | [4B metaLen][JSON meta{w,h,f}][4B jpgLen][JPEG] |
+| `input` | Client → Agent | JSON: `{action, x, y, key, button, dy}` |
+| `files` | Bidirectional | [4B metaLen][JSON meta{type,name,size,id,offset}][data] |
 
 ## Roadmap
 
-- [x] Signaling server (Go)
-- [x] Agent — Linux (xdotool)
-- [x] Agent — Windows (WinAPI)
-- [x] Web client (HTML5)
-- [ ] WebRTC P2P (replace WebSocket relay)
-- [ ] H.264 hardware encoding
-- [ ] File transfer
+- [ ] TURN server for restrictive NATs
+- [ ] H.264 hardware encoding (lower bandwidth)
 - [ ] Clipboard sync
-- [ ] NAT traversal (STUN/TURN)
-- [ ] Authentication
+- [ ] Connection password
+- [ ] Desktop app (Electron/Tauri)
+- [ ] Mobile client
 
 ## License
 
-MIT — Atlas Nexus Tech
+MIT — Atlas Nexus Tech (2026)
