@@ -1,0 +1,4 @@
+*.exe
+nexdesk-signaling
+nexdesk-agent
+.DS_Store
