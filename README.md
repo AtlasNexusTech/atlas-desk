@@ -2,7 +2,7 @@
 
 **P2P remote desktop with WebRTC.** No servers routing your video. Free. Open source.
 
-## v0.5 — Clipboard Sync + Desktop App (Tauri)
+## v0.6 — Connection Aliases + Desktop Build
 
 | Feature | Status |
 |---------|--------|
@@ -11,12 +11,12 @@
 | JPEG screen streaming | ✅ 15 FPS, Q65 |
 | Mouse/keyboard control | ✅ Cross-platform |
 | Numeric 9-digit IDs | ✅ AnyDesk-style |
+| Connection aliases | ✅ "PC Bureau" instead of "437 192 805" |
 | File transfer | ✅ Bidirectional |
 | Connection password | ✅ SHA-256 challenge-response |
 | Clipboard sync | ✅ Auto-sync both directions |
 | Desktop app (Tauri) | ✅ CI-built, see [Actions](https://github.com/AtlasNexusTech/atlas-desk/actions) |
 | Encrypted sessions | ✅ WebRTC DTLS |
-| Connection aliases | ❌ |
 | Mobile client | ❌ |
 
 ## Architecture
