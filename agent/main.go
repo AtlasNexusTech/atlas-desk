@@ -1,10 +1,12 @@
-// Atlas Desk Agent v0.3 — JPEG streaming + numeric IDs + file transfer
+// Atlas Desk Agent v0.4 — TURN support + connection password + improved config
 package main
 
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -22,13 +24,75 @@ import (
 )
 
 var (
-	signalURL  = flag.String("signal", "ws://localhost:8800/ws", "Signaling server URL")
-	agentID    = flag.String("id", "", "Agent ID (generated if empty)")
-	fps        = flag.Int("fps", 15, "Capture framerate")
+	signalURL   = flag.String("signal", "ws://localhost:8800/ws", "Signaling server URL")
+	agentIDFlag = flag.String("id", "", "Agent ID (generated if empty)")
+	fps         = flag.Int("fps", 15, "Capture framerate")
 	jpegQuality = flag.Int("quality", 65, "JPEG quality (1-100)")
+	password    = flag.String("pass", "", "Connection password (overrides config)")
 )
 
-// ── Protocol messages ──────────────────────────────────────
+// ── Config ───────────────────────────────────────────────────
+
+type Config struct {
+	ID       string `json:"id"`
+	Password string `json:"password,omitempty"` // SHA-256 of password, or empty = no auth
+	TurnServers []TurnServer `json:"turn_servers,omitempty"`
+}
+
+type TurnServer struct {
+	URLs       []string `json:"urls"`
+	Username   string   `json:"username"`
+	Credential string   `json:"credential"`
+}
+
+func loadConfig() *Config {
+	home, _ := os.UserHomeDir()
+	cfgPath := filepath.Join(home, ".atlas-desk", "config.json")
+	cfg := &Config{}
+
+	if data, err := os.ReadFile(cfgPath); err == nil {
+		json.Unmarshal(data, cfg)
+	}
+
+	if cfg.ID == "" {
+		cfg.ID = generateNumericID()
+		saveConfig(cfg)
+	}
+	if *agentIDFlag != "" {
+		cfg.ID = *agentIDFlag
+	}
+	if *password != "" {
+		cfg.Password = hashPassword(*password)
+		saveConfig(cfg)
+	}
+
+	return cfg
+}
+
+func saveConfig(cfg *Config) {
+	home, _ := os.UserHomeDir()
+	cfgDir := filepath.Join(home, ".atlas-desk")
+	os.MkdirAll(cfgDir, 0700)
+	data, _ := json.MarshalIndent(cfg, "", "  ")
+	os.WriteFile(filepath.Join(cfgDir, "config.json"), data, 0600)
+}
+
+func generateNumericID() string {
+	n, err := rand.Int(rand.Reader, big.NewInt(900_000_000))
+	if err != nil {
+		panic(err)
+	}
+	id := fmt.Sprintf("%09d", n.Int64()+100_000_000)
+	log.Printf("🆔 Generated new ID: %s", id)
+	return id
+}
+
+func hashPassword(pass string) string {
+	h := sha256.Sum256([]byte(pass))
+	return hex.EncodeToString(h[:])
+}
+
+// ── Signaling Messages ───────────────────────────────────────
 
 type SignalMsg struct {
 	Type    string          `json:"type"`
@@ -47,23 +111,31 @@ type ICEMsg struct {
 	SDPMid    string `json:"sdpMid"`
 }
 
+type AuthChallenge struct {
+	Token string `json:"token"`
+}
+
+type AuthResponse struct {
+	Proof string `json:"proof"`
+}
+
 type FrameMeta struct {
 	W     int   `json:"w"`
 	H     int   `json:"h"`
 	Frame uint64 `json:"f"`
 }
 
-// ── Main ────────────────────────────────────────────────────
+// ── Main ───────────────────────────────────────────────────────
 
 func main() {
 	flag.Parse()
 
-	// Load or generate numeric ID
-	id := loadOrGenerateID()
-	if *agentID != "" {
-		id = *agentID
+	cfg := loadConfig()
+
+	log.Printf("◆ Atlas Desk Agent v0.4  ID: %s", cfg.ID)
+	if cfg.Password != "" {
+		log.Printf("🔒 Password: set")
 	}
-	log.Printf("◆ Atlas Desk Agent v0.3  ID: %s", id)
 
 	// Connect to signaling
 	conn, _, err := websocket.DefaultDialer.Dial(*signalURL, nil)
@@ -72,14 +144,34 @@ func main() {
 	}
 	defer conn.Close()
 
+	regPayload := map[string]string{"id": cfg.ID, "role": "agent"}
+	if cfg.Password != "" {
+		regPayload["has_password"] = "true"
+	}
+
 	sendSignal(conn, SignalMsg{
 		Type:    "register",
-		Payload: mustJSON(map[string]string{"id": id, "role": "agent"}),
+		Payload: mustJSON(regPayload),
 	})
 	log.Printf("Registered to signaling server")
 
 	bounds := screenshot.GetDisplayBounds(0)
 	log.Printf("Display: %dx%d @ %d FPS  JPEG Q=%d", bounds.Dx(), bounds.Dy(), *fps, *jpegQuality)
+
+	// Build ICE servers list
+	iceServers := []webrtc.ICEServer{
+		{URLs: []string{"stun:stun.l.google.com:19302"}},
+	}
+	for _, ts := range cfg.TurnServers {
+		iceServers = append(iceServers, webrtc.ICEServer{
+			URLs:       ts.URLs,
+			Username:   ts.Username,
+			Credential: ts.Credential,
+		})
+	}
+	if len(cfg.TurnServers) > 0 {
+		log.Printf("🔄 TURN: %d server(s) configured", len(cfg.TurnServers))
+	}
 
 	// Wait for client, then set up P2P
 	for {
@@ -92,22 +184,61 @@ func main() {
 
 		switch msg.Type {
 		case "client_hello":
-			go handleSession(conn, msg.From, id, bounds)
+			go handleSession(conn, msg.From, cfg, bounds, iceServers)
 		case "pong":
 		}
 	}
 }
 
-// ── P2P Session ─────────────────────────────────────────────
+// ── P2P Session ────────────────────────────────────────────────
 
-func handleSession(conn *websocket.Conn, clientID, myID string, bounds image.Rectangle) {
+func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds image.Rectangle, iceServers []webrtc.ICEServer) {
 	log.Printf("🔗 Client: %s — establishing P2P", clientID)
 
-	config := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{URLs: []string{"stun:stun.l.google.com:19302"}},
-		},
+	// Password challenge if configured
+	if cfg.Password != "" {
+		token := fmt.Sprintf("%x-%d", sha256.Sum256([]byte(fmt.Sprintf("%s-%d", clientID, time.Now().UnixNano()))), time.Now().Unix())
+		sendSignal(conn, SignalMsg{
+			Type:   "auth_challenge",
+			Target: clientID,
+			Payload: mustJSON(AuthChallenge{Token: token}),
+		})
+		log.Printf("🔒 Sent auth challenge to %s", clientID)
+
+		// Wait for auth response
+		var authOk bool
+		for {
+			_, raw, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var msg SignalMsg
+			json.Unmarshal(raw, &msg)
+			if msg.Type == "auth_response" && msg.From == clientID {
+				var resp AuthResponse
+				json.Unmarshal(msg.Payload, &resp)
+				expectedHash := hashPassword(cfg.Password + token)
+				// Proof = SHA256(stored_hash + token) sent from client
+				if resp.Proof == expectedHash {
+					authOk = true
+					log.Printf("✅ Auth OK from %s", clientID)
+				} else {
+					log.Printf("❌ Auth FAILED from %s", clientID)
+					sendSignal(conn, SignalMsg{
+						Type:   "auth_failed",
+						Target: clientID,
+						Payload: mustJSON(map[string]string{"reason": "wrong_password"}),
+					})
+				}
+				break
+			}
+		}
+		if !authOk {
+			return
+		}
 	}
+
+	config := webrtc.Configuration{ICEServers: iceServers}
 	pc, err := webrtc.NewPeerConnection(config)
 	if err != nil {
 		log.Printf("PC error: %v", err)
@@ -115,14 +246,8 @@ func handleSession(conn *websocket.Conn, clientID, myID string, bounds image.Rec
 	}
 	defer pc.Close()
 
-	// ── Data channels ──
-	// "input" — mouse/keyboard from client
-	// "screen" — JPEG frames to client
-	// "files" — file push to client
-
-	screenReady := make(chan *webrtc.DataChannel, 1)
+	// Data channels
 	inputReady := make(chan struct{})
-	filesReady := make(chan *webrtc.DataChannel, 1)
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
 		switch dc.Label() {
@@ -134,17 +259,16 @@ func handleSession(conn *websocket.Conn, clientID, myID string, bounds image.Rec
 				handleInput(input)
 			})
 		case "screen":
-			// We create this one (agent → client)
-			dc.OnOpen(func() { screenReady <- dc })
+			dc.OnOpen(func() { /* kept for compatibility */ })
 		case "files":
-			dc.OnOpen(func() { filesReady <- dc })
+			dc.OnOpen(func() {})
 			dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-				handleFileReceive(msg.Data, dc)
+				handleFileReceive(msg.Data)
 			})
 		}
 	})
 
-	// Create screen + files channels (agent → client)
+	// Create screen channel (agent → client)
 	screenDC, err := pc.CreateDataChannel("screen", &webrtc.DataChannelInit{
 		Ordered: func(b bool) *bool { return &b }(true),
 	})
@@ -155,6 +279,7 @@ func handleSession(conn *websocket.Conn, clientID, myID string, bounds image.Rec
 	var gotScreen *webrtc.DataChannel
 	screenDC.OnOpen(func() { gotScreen = screenDC })
 
+	// Create files channel
 	fileDC, err := pc.CreateDataChannel("files", &webrtc.DataChannelInit{
 		Ordered: func(b bool) *bool { return &b }(true),
 	})
@@ -164,7 +289,7 @@ func handleSession(conn *websocket.Conn, clientID, myID string, bounds image.Rec
 	}
 	fileDC.OnOpen(func() {})
 
-	// ── ICE relay ──
+	// ICE relay
 	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
 		if c == nil {
 			return
@@ -176,7 +301,7 @@ func handleSession(conn *websocket.Conn, clientID, myID string, bounds image.Rec
 		})
 	})
 
-	// ── Create offer ──
+	// Create offer
 	offer, err := pc.CreateOffer(nil)
 	if err != nil {
 		log.Printf("Offer error: %v", err)
@@ -189,7 +314,7 @@ func handleSession(conn *websocket.Conn, clientID, myID string, bounds image.Rec
 		Payload: mustJSON(SDPMsg{SDP: offer.SDP, Type: "offer"}),
 	})
 
-	// ── Receive answer + ICE ──
+	// Receive answer + ICE
 	answerCh := make(chan webrtc.SessionDescription)
 	iceCh := make(chan webrtc.ICECandidateInit)
 
@@ -225,11 +350,10 @@ func handleSession(conn *websocket.Conn, clientID, myID string, bounds image.Rec
 		}
 	}()
 
-	// ── Wait for data channels ──
 	<-inputReady
 	log.Printf("✅ P2P connected — streaming %dx%d @ %d FPS", bounds.Dx(), bounds.Dy(), *fps)
 
-	// ── Frame capture loop ──
+	// Frame capture loop
 	ticker := time.NewTicker(time.Second / time.Duration(*fps))
 	defer ticker.Stop()
 
@@ -240,11 +364,9 @@ func handleSession(conn *websocket.Conn, clientID, myID string, bounds image.Rec
 			continue
 		}
 
-		// Encode as JPEG
 		var jpgBuf bytes.Buffer
 		jpeg.Encode(&jpgBuf, img, &jpeg.Options{Quality: *jpegQuality})
 
-		// Build length-prefixed frame: [4B metaLen][JSON meta][4B jpgLen][JPEG]
 		meta := FrameMeta{W: bounds.Dx(), H: bounds.Dy(), Frame: frameCount}
 		metaJSON, _ := json.Marshal(meta)
 
@@ -257,23 +379,15 @@ func handleSession(conn *websocket.Conn, clientID, myID string, bounds image.Rec
 		if gotScreen != nil && gotScreen.ReadyState() == webrtc.DataChannelStateOpen {
 			gotScreen.Send(pkt.Bytes())
 		}
-
 		frameCount++
 	}
 }
 
 // ── File Receive ────────────────────────────────────────────
 
-type FileMeta struct {
-	Name string `json:"name"`
-	Size int64  `json:"size"`
-	ID   string `json:"id"`
-}
-
 var activeReceives = make(map[string]*os.File)
 
-func handleFileReceive(data []byte, dc *webrtc.DataChannel) {
-	// First 4 bytes: msg type length
+func handleFileReceive(data []byte) {
 	if len(data) < 4 {
 		return
 	}
@@ -299,7 +413,6 @@ func handleFileReceive(data []byte, dc *webrtc.DataChannel) {
 		dir := filepath.Join(os.Getenv("HOME"), "Downloads", "AtlasDesk")
 		os.MkdirAll(dir, 0755)
 		outPath := filepath.Join(dir, name)
-
 		f, err := os.Create(outPath)
 		if err != nil {
 			log.Printf("File create error: %v", err)
@@ -309,15 +422,13 @@ func handleFileReceive(data []byte, dc *webrtc.DataChannel) {
 
 	case "file_chunk":
 		fileID, _ := meta["id"].(string)
-		f, ok := activeReceives[fileID]
-		if !ok {
-			return
-		}
-		if offsetF, ok := meta["offset"].(float64); ok {
-			offset := int64(offsetF)
-			f.WriteAt(payload, offset)
-		} else {
-			f.Write(payload)
+		if f, ok := activeReceives[fileID]; ok {
+			if offsetF, ok := meta["offset"].(float64); ok {
+				offset := int64(offsetF)
+				f.WriteAt(payload, offset)
+			} else {
+				f.Write(payload)
+			}
 		}
 
 	case "file_end":
@@ -336,29 +447,6 @@ func handleFileReceive(data []byte, dc *webrtc.DataChannel) {
 		}
 		log.Printf("❌ File error: %v", meta["error"])
 	}
-}
-
-// ── ID Management ───────────────────────────────────────────
-
-func loadOrGenerateID() string {
-	home, _ := os.UserHomeDir()
-	idFile := filepath.Join(home, ".atlas-desk", "id")
-
-	if data, err := os.ReadFile(idFile); err == nil {
-		return string(bytes.TrimSpace(data))
-	}
-
-	// Generate random 9-digit numeric ID
-	n, err := rand.Int(rand.Reader, big.NewInt(900_000_000))
-	if err != nil {
-		panic(err)
-	}
-	id := fmt.Sprintf("%09d", n.Int64()+100_000_000)
-
-	os.MkdirAll(filepath.Dir(idFile), 0700)
-	os.WriteFile(idFile, []byte(id), 0600)
-	log.Printf("🆔 Generated new ID: %s", id)
-	return id
 }
 
 // ── Helpers ─────────────────────────────────────────────────

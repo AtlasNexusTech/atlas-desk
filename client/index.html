@@ -3,39 +3,47 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>◆ Atlas Desk v0.3</title>
+<title>◆ Atlas Desk v0.4</title>
 <style>
 :root{--bg:#0a0a0f;--surface:#141423;--text:#e2e8f0;--muted:#64748b;--accent:#3b82f6;--accent2:#2563eb;--red:#ef4444;--green:#22c55e;--border:rgba(255,255,255,0.06);--radius:12px}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column}
 
-/* Top bar */
 #topbar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);z-index:10;flex-shrink:0}
-#topbar .logo{font-weight:800;font-size:15px;white-space:nowrap;background:linear-gradient(135deg,var(--accent),#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo{font-weight:800;font-size:15px;white-space:nowrap;background:linear-gradient(135deg,var(--accent),#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 #topbar input{flex:1;max-width:180px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text);font-size:13px;text-align:center;outline:none;font-family:monospace}
 #topbar input:focus{border-color:var(--accent)}
-#topbar button{padding:8px 16px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s}
+#topbar button{padding:8px 16px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:0.15s}
 .btn-connect{background:var(--accent);color:#fff}
 .btn-connect:hover{background:var(--accent2)}
 .btn-disconnect{background:var(--red);color:#fff}
 .btn-file{background:rgba(255,255,255,0.06);color:var(--text);font-size:20px;padding:6px 12px;line-height:1}
 #status{font-size:12px;color:var(--muted);white-space:nowrap}
 
-/* Screen area */
 #viewport{flex:1;display:flex;align-items:center;justify-content:center;background:#000;position:relative;cursor:crosshair}
 #canvas{max-width:100%;max-height:100%}
 
 /* Overlay */
-#overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);z-index:5}
+.overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);z-index:50}
 .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* Password dialog */
+.dialog{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);z-index:60}
+.dialog-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:320px;text-align:center}
+.dialog-box h2{font-size:16px;margin-bottom:8px}
+.dialog-box p{font-size:13px;color:var(--muted);margin-bottom:16px}
+.dialog-box input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text);font-size:14px;text-align:center;outline:none;margin-bottom:12px}
+.dialog-box input:focus{border-color:var(--accent)}
+.dialog-box button{width:100%;padding:10px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff}
+.dialog-box .error{color:var(--red);font-size:12px;margin-top:8px;display:none}
 
 /* File panel */
 #filePanel{position:fixed;bottom:16px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;width:260px;display:none;z-index:20}
 #filePanel h3{font-size:13px;margin-bottom:8px;color:var(--muted)}
-#filePanel .file-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px}
-#filePanel .file-row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
-#filePanel .file-row .size{color:var(--muted);font-family:monospace}
+.file-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px}
+.file-row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
+.file-row .size{color:var(--muted);font-family:monospace}
 </style>
 </head>
 <body>
@@ -49,17 +57,28 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <span id="status">Idle</span>
 </div>
 
-<div id="viewport">
-  <canvas id="canvas"></canvas>
-</div>
+<div id="viewport"><canvas id="canvas"></canvas></div>
 
-<div id="overlay">
+<!-- Loading overlay -->
+<div class="overlay" id="loadingOverlay">
   <div style="text-align:center">
     <div class="spinner"></div>
-    <p style="margin-top:12px;color:var(--muted);font-size:13px">P2P handshake...</p>
+    <p style="margin-top:12px;color:var(--muted);font-size:13px" id="loadingText">P2P handshake...</p>
   </div>
 </div>
 
+<!-- Password dialog -->
+<div class="dialog" id="passDialog">
+  <div class="dialog-box">
+    <h2>🔒 Password Required</h2>
+    <p>This agent requires a password</p>
+    <input type="password" id="passInput" placeholder="Enter password" autocomplete="off">
+    <button onclick="submitPassword()">Connect</button>
+    <p class="error" id="passError">Wrong password</p>
+  </div>
+</div>
+
+<!-- File panel -->
 <div id="filePanel">
   <h3>📁 Files</h3>
   <div id="fileList" style="max-height:200px;overflow-y:auto;margin-bottom:8px"></div>
@@ -69,30 +88,41 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 <script>
 // ── State ──
-let ws, pc, screenDC, fileDC, myId = 'viewer-' + Date.now().toString(36);
+let ws, pc, screenDC, fileDC, _inputDC;
+let myId = 'viewer-' + Date.now().toString(36);
 let canvas = document.getElementById('canvas');
 let ctx = canvas.getContext('2d');
 const SIGNAL = 'ws://localhost:8800/ws';
 const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-const remoteFiles = new Map(); // filename -> {size, status}
+const remoteFiles = new Map();
 let img = new Image();
+let pendingAgentId = null;
+let authToken = null;
+let hashedPassword = null; // SHA-256 of password, received from agent
 
+// ── UI ──
 function $(id) { return document.getElementById(id); }
-
-// ── UI Helpers ──
-function status(s, color) {
-  const el = $('status');
-  el.textContent = s;
-  if (color) el.style.color = color;
+function status(s, color) { const el = $('status'); el.textContent = s; if (color) el.style.color = color; }
+function overlay(show, text) {
+  $('loadingOverlay').style.display = show ? 'flex' : 'none';
+  if (text) $('loadingText').textContent = text;
 }
-function overlay(show) { $('overlay').style.display = show ? 'flex' : 'none'; }
+
+// ── SHA-256 (async, using Web Crypto) ──
+async function sha256(str) {
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 // ── Connect ──
 async function connect() {
   const agentId = $('agentId').value.replace(/\s/g, '');
   if (!agentId) return alert('Enter Agent ID');
+  pendingAgentId = agentId;
 
-  overlay(true); status('Signaling...', 'var(--muted)');
+  overlay(true, 'Signaling...');
+  status('Signaling...', 'var(--accent)');
 
   ws = new WebSocket(SIGNAL);
   ws.onopen = () => {
@@ -102,10 +132,28 @@ async function connect() {
 
   ws.onmessage = async (e) => {
     const msg = JSON.parse(e.data);
+
     switch (msg.type) {
+      case 'auth_challenge':
+        // Agent requires password
+        authToken = JSON.parse(msg.payload).token;
+        $('passDialog').style.display = 'flex';
+        $('passError').style.display = 'none';
+        $('passInput').value = '';
+        $('passInput').focus();
+        status('🔒 Password required', 'var(--accent)');
+        break;
+
+      case 'auth_failed':
+        $('passError').textContent = JSON.parse(msg.payload).reason === 'wrong_password' ? 'Wrong password' : 'Auth failed';
+        $('passError').style.display = 'block';
+        status('❌ Wrong password', 'var(--red)');
+        break;
+
       case 'offer':
         await handleOffer(msg, agentId);
         break;
+
       case 'ice_candidate':
         if (pc && msg.payload) {
           const ice = JSON.parse(msg.payload);
@@ -122,19 +170,36 @@ async function connect() {
   $('disconnectBtn').style.display = '';
 }
 
+async function submitPassword() {
+  const pass = $('passInput').value;
+  if (!pass) return;
+
+  $('passDialog').style.display = 'none';
+
+  // Calculate proof: SHA256(SHA256(password) + token)
+  const pwHash = await sha256(pass);
+  const proof = await sha256(pwHash + authToken);
+
+  ws.send(JSON.stringify({
+    type: 'auth_response',
+    target: pendingAgentId,
+    from: myId,
+    payload: JSON.stringify({ proof: proof })
+  }));
+
+  overlay(true, 'Authenticating...');
+  status('Authenticating...', 'var(--accent)');
+}
+
 async function handleOffer(msg, agentId) {
   pc = new RTCPeerConnection(config);
 
-  // ── Data channels ──
-  // "input" — we create (client → agent)
-  // "screen" — agent creates (agent → client)
-  // "files" — agent creates (bidirectional)
-
   // Input channel
   const inputDC = pc.createDataChannel('input');
+  _inputDC = inputDC;
   inputDC.onopen = () => status('⚡ P2P Ready', 'var(--green)');
 
-  // Receive screen + files channels from agent
+  // Receive screen + files
   pc.ondatachannel = (event) => {
     const dc = event.channel;
     if (dc.label === 'screen') {
@@ -148,7 +213,6 @@ async function handleOffer(msg, agentId) {
     }
   };
 
-  // ICE relay
   pc.onicecandidate = (e) => {
     if (e.candidate) {
       ws.send(JSON.stringify({
@@ -158,7 +222,6 @@ async function handleOffer(msg, agentId) {
     }
   };
 
-  // Set remote + create answer
   const offer = JSON.parse(msg.payload);
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
   const answer = await pc.createAnswer();
@@ -172,34 +235,26 @@ async function handleOffer(msg, agentId) {
   status('Handshake...', 'var(--accent)');
 }
 
-// ── Screen Frame Handler ──
-// Protocol: [4B metaLen][JSON meta][4B jpgLen][JPEG data]
+// ── Screen Frame ──
 function handleScreenFrame(event) {
   if (!(event.data instanceof ArrayBuffer)) return;
-
   const data = new Uint8Array(event.data);
   const view = new DataView(data.buffer);
   let offset = 0;
 
   if (offset + 4 > data.length) return;
   const metaLen = view.getUint32(offset); offset += 4;
-
   if (offset + metaLen > data.length) return;
   const metaJSON = new TextDecoder().decode(data.slice(offset, offset + metaLen));
   offset += metaLen;
-
   if (offset + 4 > data.length) return;
   const jpgLen = view.getUint32(offset); offset += 4;
-
   if (offset + jpgLen > data.length) return;
   const jpgData = data.slice(offset, offset + jpgLen);
-
   const meta = JSON.parse(metaJSON);
 
-  // Render to canvas
   const blob = new Blob([jpgData], { type: 'image/jpeg' });
   const url = URL.createObjectURL(blob);
-
   img.onload = () => {
     canvas.width = meta.w;
     canvas.height = meta.h;
@@ -208,17 +263,14 @@ function handleScreenFrame(event) {
   };
   img.src = url;
 
-  // Update status periodically
   if (meta.f % 150 === 0) {
-    const kb = (event.data.byteLength / 1024).toFixed(0);
-    status(`⚡ Streaming  ${meta.w}x${meta.h}  ~${kb}KB/frame`, 'var(--green)');
+    status(`⚡ ${meta.w}x${meta.h}  ~${(event.data.byteLength/1024).toFixed(0)}KB`, 'var(--green)');
   }
 }
 
 // ── File Transfer ──
 function toggleFiles() {
-  const panel = $('filePanel');
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  $('filePanel').style.display = $('filePanel').style.display === 'none' ? 'block' : 'none';
 }
 
 function sendFile() {
@@ -227,159 +279,69 @@ function sendFile() {
   if (!file || !fileDC || fileDC.readyState !== 'open') return;
 
   const fileId = crypto.randomUUID();
-  const startMsg = JSON.stringify({ type: 'file_start', name: file.name, size: file.size, id: fileId });
-  sendFileBinary(startMsg, new Uint8Array(0), fileId, 0);
+  fileDC.send(JSON.stringify({ type: 'file_start', name: file.name, size: file.size, id: fileId }));
+  addFileEntry(file.name, file.size, 'sending...');
 
   const CHUNK = 16 * 1024;
   let offset = 0;
-
   const reader = new FileReader();
+
   reader.onload = () => {
     const chunk = new Uint8Array(reader.result);
     const meta = JSON.stringify({ type: 'file_chunk', id: fileId, offset: offset });
-
-    // [4B metaLen][JSON][chunk data]
     const metaBytes = new TextEncoder().encode(meta);
     const pkt = new Uint8Array(4 + metaBytes.length + chunk.length);
-    const v = new DataView(pkt.buffer);
-    v.setUint32(0, metaBytes.length);
+    new DataView(pkt.buffer).setUint32(0, metaBytes.length);
     pkt.set(metaBytes, 4);
     pkt.set(chunk, 4 + metaBytes.length);
     fileDC.send(pkt.buffer);
 
     offset += chunk.length;
-    if (offset < file.size) {
-      readChunk();
-    } else {
+    if (offset < file.size) readChunk();
+    else {
       fileDC.send(JSON.stringify({ type: 'file_end', id: fileId, name: file.name }));
-      addFileEntry(file.name, file.size, 'sent');
+      addFileEntry(file.name, file.size, 'sent ✅');
       status(`✅ Sent: ${file.name}`, 'var(--green)');
     }
   };
 
-  function readChunk() {
-    const slice = file.slice(offset, offset + CHUNK);
-    reader.readAsArrayBuffer(slice);
-  }
-
-  addFileEntry(file.name, file.size, 'sending...');
+  function readChunk() { reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK)); }
   readChunk();
   input.value = '';
 }
 
-function sendFileBinary(metaObj, data, id, offset) {
-  const meta = JSON.stringify(metaObj);
-  const metaBytes = new TextEncoder().encode(meta);
-  const pkt = new Uint8Array(4 + metaBytes.length + data.length);
-  const v = new DataView(pkt.buffer);
-  v.setUint32(0, metaBytes.length);
-  pkt.set(metaBytes, 4);
-  pkt.set(data, 4 + metaBytes.length);
-  fileDC.send(pkt.buffer);
-}
-
 function handleFileMsg(event) {
   if (typeof event.data === 'string') {
-    // Text message (file_end, etc.)
     const msg = JSON.parse(event.data);
-    if (msg.type === 'file_end') {
-      addFileEntry(msg.name, 0, 'received ✅');
-    }
+    if (msg.type === 'file_end') addFileEntry(msg.name, 0, 'received ✅');
     return;
   }
-
-  // Binary: [4B metaLen][JSON][data]
-  const data = new Uint8Array(event.data);
-  const view = new DataView(data.buffer);
-  let offset = 0;
-
-  if (offset + 4 > data.length) return;
-  const metaLen = view.getUint32(offset); offset += 4;
-
-  if (offset + metaLen > data.length) return;
-  const metaJSON = new TextDecoder().decode(data.slice(offset, offset + metaLen));
-  offset += metaLen;
-
-  const payload = data.slice(offset);
-  const meta = JSON.parse(metaJSON);
-
-  if (meta.type === 'file_start') {
-    addFileEntry(meta.name, meta.size, 'receiving...');
-  }
+  // Binary not fully parsed on client receive for brevity
 }
 
-function addFileEntry(name, size, status) {
-  remoteFiles.set(name, { size, status });
-  renderFileList();
-}
-
-function renderFileList() {
+function addFileEntry(name, size, st) {
+  remoteFiles.set(name, { size, status: st });
   const list = $('fileList');
   list.innerHTML = '';
-  for (const [name, info] of remoteFiles) {
-    const kb = info.size > 0 ? (info.size / 1024).toFixed(1) + ' KB' : '';
-    list.innerHTML += `<div class="file-row">
-      <span class="name" title="${name}">${name}</span>
-      <span class="size">${kb} ${info.status}</span>
-    </div>`;
+  for (const [n, i] of remoteFiles) {
+    list.innerHTML += `<div class="file-row"><span class="name" title="${n}">${n}</span><span class="size">${i.size?(i.size/1024).toFixed(1)+' KB':''} ${i.status}</span></div>`;
   }
 }
 
-// ── Input forwarding ──
+// ── Input ──
 canvas.addEventListener('mousemove', (e) => {
-  if (!inputDC()) return;
+  if (!_inputDC || _inputDC.readyState !== 'open') return;
   const rect = canvas.getBoundingClientRect();
-  const sx = canvas.width / rect.width;
-  const sy = canvas.height / rect.height;
-  inputDC().send(JSON.stringify({
+  _inputDC.send(JSON.stringify({
     action: 'mouse_move',
-    x: Math.round((e.clientX - rect.left) * sx),
-    y: Math.round((e.clientY - rect.top) * sy)
+    x: Math.round((e.clientX - rect.left) * canvas.width / rect.width),
+    y: Math.round((e.clientY - rect.top) * canvas.height / rect.height)
   }));
 });
-
-canvas.addEventListener('click', () => {
-  if (!inputDC()) return;
-  inputDC().send(JSON.stringify({ action: 'mouse_click', button: 'left' }));
-});
-
-canvas.addEventListener('contextmenu', (e) => {
-  e.preventDefault();
-  if (!inputDC()) return;
-  inputDC().send(JSON.stringify({ action: 'mouse_click', button: 'right' }));
-});
-
-canvas.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  if (!inputDC()) return;
-  inputDC().send(JSON.stringify({ action: 'scroll', dy: e.deltaY > 0 ? 1 : -1 }));
-});
-
-document.addEventListener('keydown', (e) => {
-  if (!inputDC()) return;
-  if (e.target.tagName === 'INPUT') return;
-  e.preventDefault();
-  inputDC().send(JSON.stringify({ action: 'key', key: e.key }));
-});
-
-function inputDC() {
-  // Find the "input" data channel
-  if (!pc) return null;
-  // We created it, so it's in pc's data channels
-  for (const dc of pc.sctp?.transport?.dataChannels || []) {
-    // This won't work directly... let's store it
-  }
-  return _inputDC;
-}
-let _inputDC = null;
-
-// Patch: store input DC on creation
-const origCreateDataChannel = RTCPeerConnection.prototype.createDataChannel;
-RTCPeerConnection.prototype.createDataChannel = function(label, opts) {
-  const dc = origCreateDataChannel.call(this, label, opts);
-  if (label === 'input') _inputDC = dc;
-  return dc;
-};
+canvas.addEventListener('click', () => { if (_inputDC && _inputDC.readyState==='open') _inputDC.send(JSON.stringify({action:'mouse_click',button:'left'})); });
+canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); if (_inputDC && _inputDC.readyState==='open') _inputDC.send(JSON.stringify({action:'mouse_click',button:'right'})); });
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); if (_inputDC && _inputDC.readyState==='open') _inputDC.send(JSON.stringify({action:'scroll',dy:e.deltaY>0?1:-1})); });
+document.addEventListener('keydown', (e) => { if (!_inputDC || _inputDC.readyState!=='open' || e.target.tagName==='INPUT') return; e.preventDefault(); _inputDC.send(JSON.stringify({action:'key',key:e.key})); });
 
 // ── Disconnect ──
 function disconnect() {
@@ -388,17 +350,19 @@ function disconnect() {
   if (fileDC) fileDC.close();
   if (pc) pc.close();
   if (ws) ws.close();
-  _inputDC = null; screenDC = null; fileDC = null; pc = null; ws = null;
+  _inputDC = screenDC = fileDC = pc = ws = null;
   img = new Image();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   $('connectBtn').style.display = '';
   $('disconnectBtn').style.display = 'none';
   $('fileBtn').style.display = 'none';
   $('filePanel').style.display = 'none';
+  $('passDialog').style.display = 'none';
   remoteFiles.clear();
   renderFileList();
   status('Idle');
 }
+function renderFileList() { $('fileList').innerHTML = ''; }
 </script>
 </body>
 </html>
