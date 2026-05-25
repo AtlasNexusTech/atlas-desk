@@ -1,132 +1,120 @@
-     1|<!DOCTYPE html>
-     2|<html lang="en">
-     3|<head>
-     4|<meta charset="UTF-8">
-     5|<meta name="viewport" content="width=device-width, initial-scale=1.0">
-     6|<title>◆ Atlas Desk v0.7</title>
-     7|<style>
-     8|:root{--bg:#0a0a0f;--surface:#141423;--text:#e2e8f0;--muted:#64748b;--accent:#3b82f6;--accent2:#2563eb;--red:#ef4444;--green:#22c55e;--border:rgba(255,255,255,0.06);--radius:12px}
-     9|*{margin:0;padding:0;box-sizing:border-box}
-    10|body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column}
-    11|
-    12|#topbar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);z-index:10;flex-shrink:0}
-    13|.logo{font-weight:800;font-size:15px;white-space:nowrap;background:linear-gradient(135deg,var(--accent),#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-    14|#topbar input{flex:1;max-width:180px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text);font-size:13px;text-align:center;outline:none;font-family:monospace}
-    15|#topbar input:focus{border-color:var(--accent)}
-    16|#topbar button{padding:8px 16px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:0.15s}
-    17|.btn-connect{background:var(--accent);color:#fff}
-    18|.btn-connect:hover{background:var(--accent2)}
-    19|.btn-disconnect{background:var(--red);color:#fff}
-    20|.btn-file{background:rgba(255,255,255,0.06);color:var(--text);font-size:20px;padding:6px 12px;line-height:1}
-    21|#status{font-size:12px;color:var(--muted);white-space:nowrap}
-    22|
-    23|#viewport{flex:1;display:flex;align-items:center;justify-content:center;background:#000;position:relative;cursor:crosshair}
-    24|#canvas{max-width:100%;max-height:100%}
-    25|
-    26|/* Overlay */
-    27|.overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);z-index:50}
-    28|.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
-    29|@keyframes spin{to{transform:rotate(360deg)}}
-    30|
-    31|/* Password dialog */
-    32|.dialog{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);z-index:60}
-    33|.dialog-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:320px;text-align:center}
-    34|.dialog-box h2{font-size:16px;margin-bottom:8px}
-    35|.dialog-box p{font-size:13px;color:var(--muted);margin-bottom:16px}
-    36|.dialog-box input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text);font-size:14px;text-align:center;outline:none;margin-bottom:12px}
-    37|.dialog-box input:focus{border-color:var(--accent)}
-    38|.dialog-box button{width:100%;padding:10px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff}
-    39|.dialog-box .error{color:var(--red);font-size:12px;margin-top:8px;display:none}
-    40|
-    41|
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>◆ Atlas Desk v0.7</title>
+<style>
+:root{--bg:#0a0a0f;--surface:#141423;--text:#e2e8f0;--muted:#64748b;--accent:#3b82f6;--accent2:#2563eb;--red:#ef4444;--green:#22c55e;--border:rgba(255,255,255,0.06);--radius:12px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+#topbar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);z-index:10;flex-shrink:0}
+.logo{font-weight:800;font-size:15px;white-space:nowrap;background:linear-gradient(135deg,var(--accent),#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#topbar input{flex:1;max-width:180px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text);font-size:13px;text-align:center;outline:none;font-family:monospace}
+#topbar input:focus{border-color:var(--accent)}
+#topbar button{padding:8px 16px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:0.15s}
+.btn-connect{background:var(--accent);color:#fff}
+.btn-connect:hover{background:var(--accent2)}
+.btn-disconnect{background:var(--red);color:#fff}
+.btn-file{background:rgba(255,255,255,0.06);color:var(--text);font-size:20px;padding:6px 12px;line-height:1}
+#status{font-size:12px;color:var(--muted);white-space:nowrap}
+#viewport{flex:1;display:flex;align-items:center;justify-content:center;background:#000;position:relative;cursor:crosshair}
+#canvas{max-width:100%;max-height:100%}
+/* Overlay */
+.overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);z-index:50}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Password dialog */
+.dialog{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);z-index:60}
+.dialog-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:320px;text-align:center}
+.dialog-box h2{font-size:16px;margin-bottom:8px}
+.dialog-box p{font-size:13px;color:var(--muted);margin-bottom:16px}
+.dialog-box input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text);font-size:14px;text-align:center;outline:none;margin-bottom:12px}
+.dialog-box input:focus{border-color:var(--accent)}
+.dialog-box button{width:100%;padding:10px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff}
+.dialog-box .error{color:var(--red);font-size:12px;margin-top:8px;display:none}
 /* Stats bar */
 #statsBar{position:fixed;bottom:16px;left:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;display:none;z-index:20;font-size:11px;font-family:monospace;color:var(--muted)}
 #statsBar span{margin-right:12px}
 #statsBar .val{color:var(--text);font-weight:600}
 
 /* File panel */
-    42|#filePanel{position:fixed;bottom:16px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;width:260px;display:none;z-index:20}
-    43|#filePanel h3{font-size:13px;margin-bottom:8px;color:var(--muted)}
-    44|.file-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px}
-    45|.file-row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
-    46|.file-row .size{color:var(--muted);font-family:monospace}
-    47|</style>
-    48|</head>
-    49|<body>
-    50|
-    51|<div id="topbar">
-    52|  <span class="logo">◆ Atlas Desk</span>
-    53|  <input id="agentId" placeholder="PC Bureau or 000 000 000" maxlength="40" autocomplete="off">
-    54|  <button class="btn-connect" id="connectBtn" onclick="connect()">Connect</button>
-    55|  <button class="btn-disconnect" id="disconnectBtn" onclick="disconnect()" style="display:none">✕</button>
-    56|  <button class="btn-file" id="fileBtn" onclick="toggleFiles()" style="display:none" title="File Transfer">📁</button>
-    57|  <button class="btn-file" id="clipBtn" onclick="pasteToRemote()" style="display:none" title="Paste to Remote">📋</button>
-    58|  <button class="btn-file" id="settingsBtn" onclick="toggleSettings()" title="Settings">⚙️</button>
-    59|  <span id="status">Idle</span>
-    60|</div>
-    61|
-    62|<div id="viewport"><canvas id="canvas"></canvas><video id="remoteVideo" autoplay playsinline muted style="display:none;max-width:100%;max-height:100%"></video></div>
-    63|
-    64|<!-- Loading overlay -->
-    65|<div class="overlay" id="loadingOverlay">
-    66|  <div style="text-align:center">
-    67|    <div class="spinner"></div>
-    68|    <p style="margin-top:12px;color:var(--muted);font-size:13px" id="loadingText">P2P handshake...</p>
-    69|  </div>
-    70|</div>
-    71|
-    72|<!-- Password dialog -->
-    73|<div class="dialog" id="passDialog">
-    74|  <div class="dialog-box">
-    75|    <h2>🔒 Password Required</h2>
-    76|    <p>This agent requires a password</p>
-    77|    <input type="password" id="passInput" placeholder="Enter password" autocomplete="off">
-    78|    <button onclick="submitPassword()">Connect</button>
-    79|    <p class="error" id="passError">Wrong password</p>
-    80|  </div>
-    81|</div>
-    82|
-    83|<!-- Settings dialog -->
-    84|<div class="dialog" id="settingsDialog">
-    85|  <div class="dialog-box">
-    86|    <h2>⚙️ Settings</h2>
-    87|    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Signal Server URL</p>
-    88|    <input type="text" id="signalUrl" placeholder="ws://localhost:8800/ws" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text);font-size:13px;outline:none;margin-bottom:12px">
-    89|    <button onclick="saveSettings()" style="width:100%;padding:10px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff">Save</button>
-    90|    <button onclick="toggleSettings()" style="width:100%;padding:8px;border-radius:8px;border:none;font-size:12px;cursor:pointer;background:none;color:var(--muted);margin-top:6px">Cancel</button>
-    91|  </div>
-    92|</div>
-    93|<!-- Stats bar -->
+#filePanel{position:fixed;bottom:16px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;width:260px;display:none;z-index:20}
+#filePanel h3{font-size:13px;margin-bottom:8px;color:var(--muted)}
+.file-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px}
+.file-row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
+.file-row .size{color:var(--muted);font-family:monospace}
+</style>
+</head>
+<body>
+<div id="topbar">
+<span class="logo">◆ Atlas Desk</span>
+<input id="agentId" placeholder="PC Bureau or 000 000 000" maxlength="40" autocomplete="off">
+<button class="btn-connect" id="connectBtn" onclick="connect()">Connect</button>
+<button class="btn-disconnect" id="disconnectBtn" onclick="disconnect()" style="display:none">✕</button>
+<button class="btn-file" id="fileBtn" onclick="toggleFiles()" style="display:none" title="File Transfer">📁</button>
+<button class="btn-file" id="clipBtn" onclick="pasteToRemote()" style="display:none" title="Paste to Remote">📋</button>
+<button class="btn-file" id="settingsBtn" onclick="toggleSettings()" title="Settings">⚙️</button>
+<span id="status">Idle</span>
+</div>
+<div id="viewport"><canvas id="canvas"></canvas><video id="remoteVideo" autoplay playsinline muted style="display:none;max-width:100%;max-height:100%"></video></div>
+<!-- Loading overlay -->
+<div class="overlay" id="loadingOverlay">
+<div style="text-align:center">
+<div class="spinner"></div>
+<p style="margin-top:12px;color:var(--muted);font-size:13px" id="loadingText">P2P handshake...</p>
+</div>
+</div>
+<!-- Password dialog -->
+<div class="dialog" id="passDialog">
+<div class="dialog-box">
+<h2>🔒 Password Required</h2>
+<p>This agent requires a password</p>
+<input type="password" id="passInput" placeholder="Enter password" autocomplete="off">
+<button onclick="submitPassword()">Connect</button>
+<p class="error" id="passError">Wrong password</p>
+</div>
+</div>
+<!-- Settings dialog -->
+<div class="dialog" id="settingsDialog">
+<div class="dialog-box">
+<h2>⚙️ Settings</h2>
+<p style="font-size:12px;color:var(--muted);margin-bottom:8px">Signal Server URL</p>
+<input type="text" id="signalUrl" placeholder="ws://localhost:8800/ws" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text);font-size:13px;outline:none;margin-bottom:12px">
+<button onclick="saveSettings()" style="width:100%;padding:10px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff">Save</button>
+<button onclick="toggleSettings()" style="width:100%;padding:8px;border-radius:8px;border:none;font-size:12px;cursor:pointer;background:none;color:var(--muted);margin-top:6px">Cancel</button>
+</div>
+</div>
+<!-- Stats bar -->
 <div id="statsBar"><span>FPS <span class="val" id="sFPS">0</span></span><span>↓ <span class="val" id="sBW">0</span> KB/s</span><span>Type <span class="val" id="sType">-</span></span></div>
 
 <!-- File panel -->
-    94|<div id="filePanel">
-    95|  <h3>📁 Files</h3>
-    96|  <div id="fileList" style="max-height:200px;overflow-y:auto;margin-bottom:8px"></div>
-    97|  <input type="file" id="fileInput" onchange="sendFile()" style="display:none">
-    98|  <button onclick="document.getElementById('fileInput').click()" style="width:100%;padding:6px;border-radius:6px;border:1px dashed var(--border);background:none;color:var(--muted);cursor:pointer;font-size:12px">+ Send File to Agent</button>
-    99|</div>
-   100|
-   101|<script>
-   102|// ── State ──
-   103|let ws, pc, screenDC, fileDC, clipboardDC, _inputDC;
-   104|let myId = 'viewer-' + Date.now().toString(36);
-   105|let canvas = document.getElementById('canvas');
-   106|let ctx = canvas.getContext('2d');
-   107|const SIGNAL = (() => {
-   108|  const p = new URLSearchParams(window.location.search);
-   109|  return p.get('signal') || localStorage.getItem('atlas-desk-signal') || 'ws://localhost:8800/ws';
-   110|})();
-   111|const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-   112|const remoteFiles = new Map();
-   113|let img = new Image();
-   114|let reconnectAttempts = 0;
-   115|let reconnectTimer = null;
-   116|let wasConnected = false;
-   117|let savedAgentId = '';
-   118|let pendingAgentId = null;
-   119|let authToken = null;
-   120|let hashedPassword = null;
+<div id="filePanel">
+<h3>📁 Files</h3>
+<div id="fileList" style="max-height:200px;overflow-y:auto;margin-bottom:8px"></div>
+<input type="file" id="fileInput" onchange="sendFile()" style="display:none">
+<button onclick="document.getElementById('fileInput').click()" style="width:100%;padding:6px;border-radius:6px;border:1px dashed var(--border);background:none;color:var(--muted);cursor:pointer;font-size:12px">+ Send File to Agent</button>
+</div>
+<script>
+// ── State ──
+let ws, pc, screenDC, fileDC, clipboardDC, _inputDC;
+let myId = 'viewer-' + Date.now().toString(36);
+let canvas = document.getElementById('canvas');
+let ctx = canvas.getContext('2d');
+const SIGNAL = (() => {
+const p = new URLSearchParams(window.location.search);
+return p.get('signal') || localStorage.getItem('atlas-desk-signal') || 'ws://localhost:8800/ws';
+})();
+const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const remoteFiles = new Map();
+let img = new Image();
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+let wasConnected = false;
+let savedAgentId = '';
+let pendingAgentId = null;
+let authToken = null;
+let hashedPassword = null;
 // ── Connection Stats ──
 let statsBytes = 0, statsFrames = 0, statsStart = Date.now(), statsFPS = 0;
 let statsUpdateTimer = null;
@@ -142,146 +130,124 @@ function resetStats() {
   if (statsUpdateTimer) clearInterval(statsUpdateTimer);
 }
 
-   121|
-   122|// ── UI ──
-   123|function $(id) { return document.getElementById(id); }
-   124|function status(s, color) { const el = $('status'); el.textContent = s; if (color) el.style.color = color; }
-   125|function overlay(show, text) {
-   126|  $('loadingOverlay').style.display = show ? 'flex' : 'none';
-   127|  if (text) $('loadingText').textContent = text;
-   128|}
-   129|
-   130|// ── SHA-256 (async, using Web Crypto) ──
-   131|async function sha256(str) {
-   132|  const buf = new TextEncoder().encode(str);
-   133|  const hash = await crypto.subtle.digest('SHA-256', buf);
-   134|  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-   135|}
-   136|
-   137|// ── Connect ──
-   138|async function connect() {
-   139|  const agentId = $('agentId').value.replace(/\s/g, '');
-   140|  if (!agentId && !savedAgentId) return alert('Enter Agent ID');
-   141|  if (!agentId) $('agentId').value = savedAgentId;
-   142|  const targetId = agentId || savedAgentId;
-   143|  pendingAgentId = targetId;
-   144|  savedAgentId = targetId;
-   145|
-   146|  overlay(true, 'Signaling...');
-   147|  status('Signaling...', 'var(--accent)');
-   148|
-   149|  ws = new WebSocket(SIGNAL);
-   150|  ws.onopen = () => {
-   151|    ws.send(JSON.stringify({ type: 'register', payload: { id: myId, role: 'client' }, target: agentId }));
-   152|    status('Awaiting P2P...', 'var(--accent)');
-   153|  };
-   154|
-   155|  ws.onmessage = async (e) => {
-   156|    const msg = JSON.parse(e.data);
-   157|
-   158|    switch (msg.type) {
-   159|      case 'auth_challenge':
-   160|        authToken = JSON.parse(msg.payload).token;
-   161|        $('passDialog').style.display = 'flex';
-   162|        $('passError').style.display = 'none';
-   163|        $('passInput').value = '';
-   164|        $('passInput').focus();
-   165|        status('🔒 Password required', 'var(--accent)');
-   166|        break;
-   167|
-   168|      case 'auth_failed':
-   169|        $('passError').textContent = JSON.parse(msg.payload).reason === 'wrong_password' ? 'Wrong password' : 'Auth failed';
-   170|        $('passError').style.display = 'block';
-   171|        status('❌ Wrong password', 'var(--red)');
-   172|        break;
-   173|
-   174|      case 'error':
-   175|        const errReason = JSON.parse(msg.payload || '{}').reason || 'Unknown error';
-   176|        if (errReason === 'target_not_found') {
-   177|          status(`❌ Not found: "${JSON.parse(msg.payload).target}"`, 'var(--red)');
-   178|          overlay(false);
-   179|          disconnect();
-   180|        }
-   181|        break;
-   182|
-   183|      case 'offer':
-   184|        await handleOffer(msg, agentId);
-   185|        break;
-   186|
-   187|      case 'ice_candidate':
-   188|        if (pc && msg.payload) {
-   189|          const ice = JSON.parse(msg.payload);
-   190|          pc.addIceCandidate(new RTCIceCandidate(ice));
-   191|        }
-   192|        break;
-   193|    }
-   194|  };
-   195|
-   196|  ws.onclose = () => { 
-   197|    if (wasConnected) {
-   198|      status(`⚠️ Connection lost — reconnecting in 3s...`, 'var(--red)');
-   199|      reconnectTimer = setTimeout(() => {
-   200|        if (savedAgentId) {
-   201|          reconnectAttempts++;
-   202|          connect();
-   203|        }
-   204|      }, 3000);
-   205|    } else {
-   206|      status('Disconnected', 'var(--red)'); 
-   207|      overlay(false); 
-   208|    }
-   209|  };
-   210|  ws.onerror = () => status('Signal error', 'var(--red)');
-   211|
-   212|  $('connectBtn').style.display = 'none';
-   213|  $('disconnectBtn').style.display = '';
-   214|}
-   215|
-   216|async function submitPassword() {
-   217|  const pass = $('passInput').value;
-   218|  if (!pass) return;
-   219|
-   220|  $('passDialog').style.display = 'none';
-   221|
-   222|  const pwHash = await sha256(pass);
-   223|  const proof = await sha256(pwHash + authToken);
-   224|
-   225|  ws.send(JSON.stringify({
-   226|    type: 'auth_response',
-   227|    target: pendingAgentId,
-   228|    from: myId,
-   229|    payload: JSON.stringify({ proof: proof })
-   230|  }));
-   231|
-   232|  overlay(true, 'Authenticating...');
-   233|  status('Authenticating...', 'var(--accent)');
-   234|}
-   235|
-   236|async function handleOffer(msg, agentId) {
-   237|  pc = new RTCPeerConnection(config);
-   238|
-   239|  const inputDC = pc.createDataChannel('input');
-   240|  _inputDC = inputDC;
-   241|  inputDC.onopen = () => status('⚡ P2P Ready', 'var(--green)');
-   242|
-   243|  pc.ondatachannel = (event) => {
-   244|    const dc = event.channel;
-   245|    if (dc.label === 'screen') {
-   246|      screenDC = dc;
-   247|      dc.onmessage = handleScreenFrame;
-   248|      dc.binaryType = 'arraybuffer';
-   249|      dc.onopen = () => { overlay(false); wasConnected = true; resetStats(); statsUpdateTimer = setInterval(updateStats, 1000); $('statsBar').style.display = ''; status('⚡ Streaming', 'var(--green)'); };
-   250|    } else if (dc.label === 'files') {
-   251|      fileDC = dc;
-   252|      dc.onmessage = handleFileMsg;
-   253|      dc.onopen = () => { $('fileBtn').style.display = ''; };
-   254|    } else if (dc.label === 'clipboard') {
-   255|      clipboardDC = dc;
-   256|      dc.onmessage = handleClipboardMsg;
-   257|      dc.onopen = () => { $('clipBtn').style.display = ''; };
-   258|    }
-   259|  };
-   260|
+// ── UI ──
+function $(id) { return document.getElementById(id); }
+function status(s, color) { const el = $('status'); el.textContent = s; if (color) el.style.color = color; }
+function overlay(show, text) {
+$('loadingOverlay').style.display = show ? 'flex' : 'none';
+if (text) $('loadingText').textContent = text;
+}
+// ── SHA-256 (async, using Web Crypto) ──
+async function sha256(str) {
+const buf = new TextEncoder().encode(str);
+const hash = await crypto.subtle.digest('SHA-256', buf);
+return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+// ── Connect ──
+async function connect() {
+const agentId = $('agentId').value.replace(/\s/g, '');
+if (!agentId && !savedAgentId) return alert('Enter Agent ID');
+if (!agentId) $('agentId').value = savedAgentId;
+const targetId = agentId || savedAgentId;
+pendingAgentId = targetId;
+savedAgentId = targetId;
+overlay(true, 'Signaling...');
+status('Signaling...', 'var(--accent)');
+ws = new WebSocket(SIGNAL);
+ws.onopen = () => {
+ws.send(JSON.stringify({ type: 'register', payload: { id: myId, role: 'client' }, target: agentId }));
+status('Awaiting P2P...', 'var(--accent)');
+};
+ws.onmessage = async (e) => {
+const msg = JSON.parse(e.data);
+switch (msg.type) {
+case 'auth_challenge':
+authToken = JSON.parse(msg.payload).token;
+$('passDialog').style.display = 'flex';
+$('passError').style.display = 'none';
+$('passInput').value = '';
+$('passInput').focus();
+status('🔒 Password required', 'var(--accent)');
+break;
+case 'auth_failed':
+$('passError').textContent = JSON.parse(msg.payload).reason === 'wrong_password' ? 'Wrong password' : 'Auth failed';
+$('passError').style.display = 'block';
+status('❌ Wrong password', 'var(--red)');
+break;
+case 'error':
+const errReason = JSON.parse(msg.payload || '{}').reason || 'Unknown error';
+if (errReason === 'target_not_found') {
+status(`❌ Not found: "${JSON.parse(msg.payload).target}"`, 'var(--red)');
+overlay(false);
+disconnect();
+}
+break;
+case 'offer':
+await handleOffer(msg, agentId);
+break;
+case 'ice_candidate':
+if (pc && msg.payload) {
+const ice = JSON.parse(msg.payload);
+pc.addIceCandidate(new RTCIceCandidate(ice));
+}
+break;
+}
+};
+ws.onclose = () => { 
+if (wasConnected) {
+status(`⚠️ Connection lost — reconnecting in 3s...`, 'var(--red)');
+reconnectTimer = setTimeout(() => {
+if (savedAgentId) {
+reconnectAttempts++;
+connect();
+}
+}, 3000);
+} else {
+status('Disconnected', 'var(--red)'); 
+overlay(false); 
+}
+};
+ws.onerror = () => status('Signal error', 'var(--red)');
+$('connectBtn').style.display = 'none';
+$('disconnectBtn').style.display = '';
+}
+async function submitPassword() {
+const pass = $('passInput').value;
+if (!pass) return;
+$('passDialog').style.display = 'none';
+const pwHash = await sha256(pass);
+const proof = await sha256(pwHash + authToken);
+ws.send(JSON.stringify({
+type: 'auth_response',
+target: pendingAgentId,
+from: myId,
+payload: JSON.stringify({ proof: proof })
+}));
+overlay(true, 'Authenticating...');
+status('Authenticating...', 'var(--accent)');
+}
+async function handleOffer(msg, agentId) {
+pc = new RTCPeerConnection(config);
+const inputDC = pc.createDataChannel('input');
+_inputDC = inputDC;
+inputDC.onopen = () => status('⚡ P2P Ready', 'var(--green)');
+pc.ondatachannel = (event) => {
+const dc = event.channel;
+if (dc.label === 'screen') {
+screenDC = dc;
+dc.onmessage = handleScreenFrame;
+dc.binaryType = 'arraybuffer';
+dc.onopen = () => { overlay(false); wasConnected = true; resetStats(); statsUpdateTimer = setInterval(updateStats, 1000); $('statsBar').style.display = ''; status('⚡ Streaming', 'var(--green)'); };
+} else if (dc.label === 'files') {
+fileDC = dc;
+dc.onmessage = handleFileMsg;
+dc.onopen = () => { $('fileBtn').style.display = ''; };
+} else if (dc.label === 'clipboard') {
+clipboardDC = dc;
+dc.onmessage = handleClipboardMsg;
+dc.onopen = () => { $('clipBtn').style.display = ''; };
+}
+};
   // H.264 video track (primary streaming path) — v0.8
   pc.ontrack = (event) => {
     const stream = event.streams[0];
@@ -300,242 +266,218 @@ function resetStats() {
       status('🎥 H.264 Streaming', 'var(--green)');
     };
   };
-   261|  pc.onicecandidate = (e) => {
-   262|    if (e.candidate) {
-   263|      ws.send(JSON.stringify({
-   264|        type: 'ice_candidate', target: agentId,
-   265|        payload: JSON.stringify({ candidate: e.candidate.candidate, sdpMid: e.candidate.sdpMid })
-   266|      }));
-   267|    }
-   268|  };
-   269|
-   270|  const offer = JSON.parse(msg.payload);
-   271|  await pc.setRemoteDescription(new RTCSessionDescription(offer));
-   272|  const answer = await pc.createAnswer();
-   273|  await pc.setLocalDescription(answer);
-   274|
-   275|  ws.send(JSON.stringify({
-   276|    type: 'answer', target: agentId,
-   277|    payload: JSON.stringify({ sdp: answer.sdp, type: 'answer' })
-   278|  }));
-   279|
-   280|  status('Handshake...', 'var(--accent)');
-   281|}
-   282|
-   283|// ── Screen Frame (v1: full + diff encoding) ──
-   284|function handleScreenFrame(event) {
-   285|  if (!(event.data instanceof ArrayBuffer)) return;
-   286|  const data = new Uint8Array(event.data);
-   287|  const view = new DataView(data.buffer);
-   288|  let offset = 0;
-   289|
-   290|  if (offset >= data.length) return;
-   291|  const frameType = data[offset]; offset += 1;
-   292|
-   293|  if (offset + 4 > data.length) return;
-   294|  const metaLen = view.getUint32(offset); offset += 4;
-   295|  if (offset + metaLen > data.length) return;
-   296|  const metaJSON = new TextDecoder().decode(data.slice(offset, offset + metaLen));
-   297|  const meta = JSON.parse(metaJSON);
-   298|  offset += metaLen;
-   299|
-   300|  if (frameType === 0x00) {
-   301|    // Full frame
-   302|    if (offset + 4 > data.length) return;
-   303|    const jpgLen = view.getUint32(offset); offset += 4;
-   304|    if (offset + jpgLen > data.length) return;
-   305|    const jpgData = data.slice(offset, offset + jpgLen);
-   306|    const blob = new Blob([jpgData], { type: 'image/jpeg' });
-   307|    const url = URL.createObjectURL(blob);
-   308|    img.onload = () => {
-   309|      canvas.width = meta.w;
-   310|      canvas.height = meta.h;
-   311|      ctx.drawImage(img, 0, 0);
-   312|      URL.revokeObjectURL(url);
-   313|    };
-   314|    img.src = url;
-   315|  } else if (frameType === 0x01) {
-   316|    // Diff frame — composite blocks
-   317|    if (offset + 2 > data.length) return;
-   318|    const numBlocks = view.getUint16(offset); offset += 2;
-   319|    if (numBlocks === 0) return;
-   320|    if (canvas.width !== meta.w || canvas.height !== meta.h) {
-   321|      canvas.width = meta.w; canvas.height = meta.h;
-   322|    }
-   323|    for (let i = 0; i < numBlocks; i++) {
-   324|      if (offset + 10 > data.length) break;
-   325|      const bx = view.getUint16(offset); offset += 2;
-   326|      const by = view.getUint16(offset); offset += 2;
-   327|      const bw = view.getUint16(offset); offset += 2;
-   328|      const bh = view.getUint16(offset); offset += 2;
-   329|      const blen = view.getUint32(offset); offset += 4;
-   330|      if (offset + blen > data.length) break;
-   331|      const bdata = data.slice(offset, offset + blen);
-   332|      offset += blen;
-   333|      const bUrl = URL.createObjectURL(new Blob([bdata], { type: 'image/jpeg' }));
-   334|      const bi = new Image();
-   335|      bi.onload = (function(x,y,w,h,u) { return function() { ctx.drawImage(this, x, y, w, h); URL.revokeObjectURL(u); }; })(bx, by, bw, bh, bUrl);
-   336|      bi.src = bUrl;
-   337|    }
-   338|  }
-   339|
-   340|  if (meta.f % 150 === 0) {
-   341|    const kb = (event.data.byteLength / 1024).toFixed(1);
-   342|    const type = frameType === 0x00 ? 'FULL' : 'DIFF';
-   343|    statsFrames++;
+pc.onicecandidate = (e) => {
+if (e.candidate) {
+ws.send(JSON.stringify({
+type: 'ice_candidate', target: agentId,
+payload: JSON.stringify({ candidate: e.candidate.candidate, sdpMid: e.candidate.sdpMid })
+}));
+}
+};
+const offer = JSON.parse(msg.payload);
+await pc.setRemoteDescription(new RTCSessionDescription(offer));
+const answer = await pc.createAnswer();
+await pc.setLocalDescription(answer);
+ws.send(JSON.stringify({
+type: 'answer', target: agentId,
+payload: JSON.stringify({ sdp: answer.sdp, type: 'answer' })
+}));
+status('Handshake...', 'var(--accent)');
+}
+// ── Screen Frame (v1: full + diff encoding) ──
+function handleScreenFrame(event) {
+if (!(event.data instanceof ArrayBuffer)) return;
+const data = new Uint8Array(event.data);
+const view = new DataView(data.buffer);
+let offset = 0;
+if (offset >= data.length) return;
+const frameType = data[offset]; offset += 1;
+if (offset + 4 > data.length) return;
+const metaLen = view.getUint32(offset); offset += 4;
+if (offset + metaLen > data.length) return;
+const metaJSON = new TextDecoder().decode(data.slice(offset, offset + metaLen));
+const meta = JSON.parse(metaJSON);
+offset += metaLen;
+if (frameType === 0x00) {
+// Full frame
+if (offset + 4 > data.length) return;
+const jpgLen = view.getUint32(offset); offset += 4;
+if (offset + jpgLen > data.length) return;
+const jpgData = data.slice(offset, offset + jpgLen);
+const blob = new Blob([jpgData], { type: 'image/jpeg' });
+const url = URL.createObjectURL(blob);
+img.onload = () => {
+canvas.width = meta.w;
+canvas.height = meta.h;
+ctx.drawImage(img, 0, 0);
+URL.revokeObjectURL(url);
+};
+img.src = url;
+} else if (frameType === 0x01) {
+// Diff frame — composite blocks
+if (offset + 2 > data.length) return;
+const numBlocks = view.getUint16(offset); offset += 2;
+if (numBlocks === 0) return;
+if (canvas.width !== meta.w || canvas.height !== meta.h) {
+canvas.width = meta.w; canvas.height = meta.h;
+}
+for (let i = 0; i < numBlocks; i++) {
+if (offset + 10 > data.length) break;
+const bx = view.getUint16(offset); offset += 2;
+const by = view.getUint16(offset); offset += 2;
+const bw = view.getUint16(offset); offset += 2;
+const bh = view.getUint16(offset); offset += 2;
+const blen = view.getUint32(offset); offset += 4;
+if (offset + blen > data.length) break;
+const bdata = data.slice(offset, offset + blen);
+offset += blen;
+const bUrl = URL.createObjectURL(new Blob([bdata], { type: 'image/jpeg' }));
+const bi = new Image();
+bi.onload = (function(x,y,w,h,u) { return function() { ctx.drawImage(this, x, y, w, h); URL.revokeObjectURL(u); }; })(bx, by, bw, bh, bUrl);
+bi.src = bUrl;
+}
+}
+if (meta.f % 150 === 0) {
+const kb = (event.data.byteLength / 1024).toFixed(1);
+const type = frameType === 0x00 ? 'FULL' : 'DIFF';
+statsFrames++;
     statsBytes += event.data.byteLength;
     $('sType').textContent = type;
     status(`⚡ ${meta.w}x${meta.h} ${type} ~${kb}KB`, 'var(--green)');
-   344|  }
-   345|}
-   346|
-   347|// ── File Transfer ──
-   348|function toggleFiles() {
-   349|  $('filePanel').style.display = $('filePanel').style.display === 'none' ? 'block' : 'none';
-   350|}
-   351|
-   352|function sendFile() {
-   353|  const input = $('fileInput');
-   354|  const file = input.files[0];
-   355|  if (!file || !fileDC || fileDC.readyState !== 'open') return;
-   356|
-   357|  const fileId = crypto.randomUUID();
-   358|  fileDC.send(JSON.stringify({ type: 'file_start', name: file.name, size: file.size, id: fileId }));
-   359|  addFileEntry(file.name, file.size, 'sending...');
-   360|
-   361|  const CHUNK = 16 * 1024;
-   362|  let offset = 0;
-   363|  const reader = new FileReader();
-   364|
-   365|  reader.onload = () => {
-   366|    const chunk = new Uint8Array(reader.result);
-   367|    const meta = JSON.stringify({ type: 'file_chunk', id: fileId, offset: offset });
-   368|    const metaBytes = new TextEncoder().encode(meta);
-   369|    const pkt = new Uint8Array(4 + metaBytes.length + chunk.length);
-   370|    new DataView(pkt.buffer).setUint32(0, metaBytes.length);
-   371|    pkt.set(metaBytes, 4);
-   372|    pkt.set(chunk, 4 + metaBytes.length);
-   373|    fileDC.send(pkt.buffer);
-   374|
-   375|    offset += chunk.length;
-   376|    if (offset < file.size) readChunk();
-   377|    else {
-   378|      fileDC.send(JSON.stringify({ type: 'file_end', id: fileId, name: file.name }));
-   379|      addFileEntry(file.name, file.size, 'sent ✅');
-   380|      status(`✅ Sent: ${file.name}`, 'var(--green)');
-   381|    }
-   382|  };
-   383|
-   384|  function readChunk() { reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK)); }
-   385|  readChunk();
-   386|  input.value = '';
-   387|}
-   388|
-   389|function handleFileMsg(event) {
-   390|  if (typeof event.data === 'string') {
-   391|    const msg = JSON.parse(event.data);
-   392|    if (msg.type === 'file_end') addFileEntry(msg.name, 0, 'received ✅');
-   393|    return;
-   394|  }
-   395|}
-   396|
-   397|function addFileEntry(name, size, st) {
-   398|  remoteFiles.set(name, { size, status: st });
-   399|  const list = $('fileList');
-   400|  list.innerHTML = '';
-   401|  for (const [n, i] of remoteFiles) {
-   402|    list.innerHTML += `<div class="file-row"><span class="name" title="${n}">${n}</span><span class="size">${i.size?(i.size/1024).toFixed(1)+' KB':''} ${i.status}</span></div>`;
-   403|  }
-   404|}
-   405|
-   406|// ── Input ──
-   407|canvas.addEventListener('mousemove', (e) => {
-   408|  if (!_inputDC || _inputDC.readyState !== 'open') return;
-   409|  const rect = canvas.getBoundingClientRect();
-   410|  _inputDC.send(JSON.stringify({
-   411|    action: 'mouse_move',
-   412|    x: Math.round((e.clientX - rect.left) * canvas.width / rect.width),
-   413|    y: Math.round((e.clientY - rect.top) * canvas.height / rect.height)
-   414|  }));
-   415|});
-   416|canvas.addEventListener('click', () => { if (_inputDC && _inputDC.readyState==='open') _inputDC.send(JSON.stringify({action:'mouse_click',button:'left'})); });
-   417|canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); if (_inputDC && _inputDC.readyState==='open') _inputDC.send(JSON.stringify({action:'mouse_click',button:'right'})); });
-   418|canvas.addEventListener('wheel', (e) => { e.preventDefault(); if (_inputDC && _inputDC.readyState==='open') _inputDC.send(JSON.stringify({action:'scroll',dy:e.deltaY>0?1:-1})); });
-   419|document.addEventListener('keydown', (e) => { if (!_inputDC || _inputDC.readyState!=='open' || e.target.tagName==='INPUT') return; e.preventDefault(); _inputDC.send(JSON.stringify({action:'key',key:e.key})); });
-   420|
-   421|// ── Clipboard Sync ──
-   422|function handleClipboardMsg(event) {
-   423|  const msg = JSON.parse(event.data);
-   424|  if (msg.type === 'clipboard' && msg.text) {
-   425|    navigator.clipboard.writeText(msg.text).then(() => {
-   426|      status(`📋 Copied: ${msg.text.substring(0, 40)}...`, 'var(--accent)');
-   427|      setTimeout(() => status('⚡ Streaming', 'var(--green)'), 2000);
-   428|    }).catch(() => {});
-   429|  }
-   430|}
-   431|
-   432|async function pasteToRemote() {
-   433|  if (!clipboardDC || clipboardDC.readyState !== 'open') return;
-   434|  try {
-   435|    const text = await navigator.clipboard.readText();
-   436|    if (text) {
-   437|      clipboardDC.send(JSON.stringify({ type: 'clipboard', text: text }));
-   438|      status(`📋 Pasted to remote: ${text.substring(0, 30)}...`, 'var(--accent)');
-   439|      setTimeout(() => status('⚡ Streaming', 'var(--green)'), 1500);
-   440|    }
-   441|  } catch(e) {
-   442|    status('⚠️ Clipboard access denied — click the page first', 'var(--red)');
-   443|  }
-   444|}
-   445|
-   446|// ── Settings ──
-   447|function toggleSettings() {
-   448|  const d = $('settingsDialog');
-   449|  if (d.style.display === 'flex') {
-   450|    d.style.display = 'none';
-   451|  } else {
-   452|    $('signalUrl').value = localStorage.getItem('atlas-desk-signal') || 'ws://localhost:8800/ws';
-   453|    d.style.display = 'flex';
-   454|  }
-   455|}
-   456|
-   457|function saveSettings() {
-   458|  const url = $('signalUrl').value.trim();
-   459|  if (url) {
-   460|    localStorage.setItem('atlas-desk-signal', url);
-   461|    status('✅ Settings saved — reload page to apply', 'var(--green)');
-   462|  }
-   463|  $('settingsDialog').style.display = 'none';
-   464|}
-   465|
-   466|// ── Disconnect ──
-   467|function disconnect() {
-   468|  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-   469|  wasConnected = false;
-   470|  savedAgentId = '';
-   471|  if (_inputDC) _inputDC.close();
-   472|  if (screenDC) screenDC.close();
-   473|  if (fileDC) fileDC.close();
-   474|  if (clipboardDC) clipboardDC.close();
-   475|  if (pc) pc.close();
-   476|  if (ws) ws.close();
-   477|  _inputDC = screenDC = fileDC = clipboardDC = pc = ws = null;
-   478|  img = new Image();
-   479|  ctx.clearRect(0, 0, canvas.width, canvas.height);
-   480|  $('connectBtn').style.display = '';
-   481|  $('disconnectBtn').style.display = 'none';
-   482|  $('fileBtn').style.display = 'none';
-   483|  $('clipBtn').style.display = 'none';
-   484|  $('filePanel').style.display = 'none';
-   485|  $('passDialog').style.display = 'none';
-   486|  remoteFiles.clear();
-   487|  renderFileList();
-   488|  if (statsUpdateTimer) clearInterval(statsUpdateTimer);
+}
+}
+// ── File Transfer ──
+function toggleFiles() {
+$('filePanel').style.display = $('filePanel').style.display === 'none' ? 'block' : 'none';
+}
+function sendFile() {
+const input = $('fileInput');
+const file = input.files[0];
+if (!file || !fileDC || fileDC.readyState !== 'open') return;
+const fileId = crypto.randomUUID();
+fileDC.send(JSON.stringify({ type: 'file_start', name: file.name, size: file.size, id: fileId }));
+addFileEntry(file.name, file.size, 'sending...');
+const CHUNK = 16 * 1024;
+let offset = 0;
+const reader = new FileReader();
+reader.onload = () => {
+const chunk = new Uint8Array(reader.result);
+const meta = JSON.stringify({ type: 'file_chunk', id: fileId, offset: offset });
+const metaBytes = new TextEncoder().encode(meta);
+const pkt = new Uint8Array(4 + metaBytes.length + chunk.length);
+new DataView(pkt.buffer).setUint32(0, metaBytes.length);
+pkt.set(metaBytes, 4);
+pkt.set(chunk, 4 + metaBytes.length);
+fileDC.send(pkt.buffer);
+offset += chunk.length;
+if (offset < file.size) readChunk();
+else {
+fileDC.send(JSON.stringify({ type: 'file_end', id: fileId, name: file.name }));
+addFileEntry(file.name, file.size, 'sent ✅');
+status(`✅ Sent: ${file.name}`, 'var(--green)');
+}
+};
+function readChunk() { reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK)); }
+readChunk();
+input.value = '';
+}
+function handleFileMsg(event) {
+if (typeof event.data === 'string') {
+const msg = JSON.parse(event.data);
+if (msg.type === 'file_end') addFileEntry(msg.name, 0, 'received ✅');
+return;
+}
+}
+function addFileEntry(name, size, st) {
+remoteFiles.set(name, { size, status: st });
+const list = $('fileList');
+list.innerHTML = '';
+for (const [n, i] of remoteFiles) {
+list.innerHTML += `<div class="file-row"><span class="name" title="${n}">${n}</span><span class="size">${i.size?(i.size/1024).toFixed(1)+' KB':''} ${i.status}</span></div>`;
+}
+}
+// ── Input ──
+canvas.addEventListener('mousemove', (e) => {
+if (!_inputDC || _inputDC.readyState !== 'open') return;
+const rect = canvas.getBoundingClientRect();
+_inputDC.send(JSON.stringify({
+action: 'mouse_move',
+x: Math.round((e.clientX - rect.left) * canvas.width / rect.width),
+y: Math.round((e.clientY - rect.top) * canvas.height / rect.height)
+}));
+});
+canvas.addEventListener('click', () => { if (_inputDC && _inputDC.readyState==='open') _inputDC.send(JSON.stringify({action:'mouse_click',button:'left'})); });
+canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); if (_inputDC && _inputDC.readyState==='open') _inputDC.send(JSON.stringify({action:'mouse_click',button:'right'})); });
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); if (_inputDC && _inputDC.readyState==='open') _inputDC.send(JSON.stringify({action:'scroll',dy:e.deltaY>0?1:-1})); });
+document.addEventListener('keydown', (e) => { if (!_inputDC || _inputDC.readyState!=='open' || e.target.tagName==='INPUT') return; e.preventDefault(); _inputDC.send(JSON.stringify({action:'key',key:e.key})); });
+// ── Clipboard Sync ──
+function handleClipboardMsg(event) {
+const msg = JSON.parse(event.data);
+if (msg.type === 'clipboard' && msg.text) {
+navigator.clipboard.writeText(msg.text).then(() => {
+status(`📋 Copied: ${msg.text.substring(0, 40)}...`, 'var(--accent)');
+setTimeout(() => status('⚡ Streaming', 'var(--green)'), 2000);
+}).catch(() => {});
+}
+}
+async function pasteToRemote() {
+if (!clipboardDC || clipboardDC.readyState !== 'open') return;
+try {
+const text = await navigator.clipboard.readText();
+if (text) {
+clipboardDC.send(JSON.stringify({ type: 'clipboard', text: text }));
+status(`📋 Pasted to remote: ${text.substring(0, 30)}...`, 'var(--accent)');
+setTimeout(() => status('⚡ Streaming', 'var(--green)'), 1500);
+}
+} catch(e) {
+status('⚠️ Clipboard access denied — click the page first', 'var(--red)');
+}
+}
+// ── Settings ──
+function toggleSettings() {
+const d = $('settingsDialog');
+if (d.style.display === 'flex') {
+d.style.display = 'none';
+} else {
+$('signalUrl').value = localStorage.getItem('atlas-desk-signal') || 'ws://localhost:8800/ws';
+d.style.display = 'flex';
+}
+}
+function saveSettings() {
+const url = $('signalUrl').value.trim();
+if (url) {
+localStorage.setItem('atlas-desk-signal', url);
+status('✅ Settings saved — reload page to apply', 'var(--green)');
+}
+$('settingsDialog').style.display = 'none';
+}
+// ── Disconnect ──
+function disconnect() {
+if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+wasConnected = false;
+savedAgentId = '';
+if (_inputDC) _inputDC.close();
+if (screenDC) screenDC.close();
+if (fileDC) fileDC.close();
+if (clipboardDC) clipboardDC.close();
+if (pc) pc.close();
+if (ws) ws.close();
+_inputDC = screenDC = fileDC = clipboardDC = pc = ws = null;
+img = new Image();
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+$('connectBtn').style.display = '';
+$('disconnectBtn').style.display = 'none';
+$('fileBtn').style.display = 'none';
+$('clipBtn').style.display = 'none';
+$('filePanel').style.display = 'none';
+$('passDialog').style.display = 'none';
+remoteFiles.clear();
+renderFileList();
+if (statsUpdateTimer) clearInterval(statsUpdateTimer);
   $('statsBar').style.display = 'none';
   status('Idle');
-   489|}
-   490|function renderFileList() { $('fileList').innerHTML = ''; }
-   491|</script>
-   492|</body>
-   493|</html>
-   494|
+}
+function renderFileList() { $('fileList').innerHTML = ''; }
+</script>
+</body>
+</html>
