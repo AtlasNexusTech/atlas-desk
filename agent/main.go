@@ -28,6 +28,7 @@ var (
 	jpegQuality = flag.Int("quality", 65, "JPEG quality (1-100)")
 	password    = flag.String("pass", "", "Connection password (overrides config)")
 	alias       = flag.String("alias", "", "Display alias (e.g. 'PC Bureau')")
+	h264Mode    = flag.Bool("h264", true, "Use H.264 hardware encoding (fallback: JPEG diff)")
 )
 
 // ── Config ───────────────────────────────────────────────────
@@ -283,7 +284,7 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 		}
 	})
 
-	// Create screen channel (agent → client)
+	// Create screen channel (agent → client) — JPEG diff fallback
 	screenDC, err := pc.CreateDataChannel("screen", &webrtc.DataChannelInit{
 		Ordered: func(b bool) *bool { return &b }(true),
 	})
@@ -293,6 +294,36 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 	}
 	var gotScreen *webrtc.DataChannel
 	screenDC.OnOpen(func() { gotScreen = screenDC })
+
+	// H.264 video track (primary streaming path)
+	var videoTrack *webrtc.TrackLocalStaticSample
+	var h264enc *H264Encoder
+	if *h264Mode {
+		videoTrack, err = webrtc.NewTrackLocalStaticSample(
+			webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264},
+			"video", "atlas-desk",
+		)
+		if err != nil {
+			log.Printf("⚠ H.264 track error: %v — falling back to JPEG", err)
+			*h264Mode = false
+		} else {
+			if _, err := pc.AddTrack(videoTrack); err != nil {
+				log.Printf("⚠ H.264 addTrack error: %v — falling back to JPEG", err)
+				*h264Mode = false
+			} else {
+				h264enc, err = NewH264Encoder(bounds.Dx(), bounds.Dy(), *fps)
+				if err != nil {
+					log.Printf("⚠ H.264 encoder init error: %v — falling back to JPEG", err)
+					*h264Mode = false
+				}
+			}
+		}
+	}
+	if *h264Mode {
+		log.Printf("🎥 H.264 video track active (%dx%d @ %d FPS)", bounds.Dx(), bounds.Dy(), *fps)
+	} else {
+		log.Printf("🖼 JPEG diff fallback active (Q=%d)", *jpegQuality)
+	}
 
 	// Create files channel
 	fileDC, err := pc.CreateDataChannel("files", &webrtc.DataChannelInit{
@@ -394,9 +425,17 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 		}
 	}()
 
-	// Frame capture loop with diff encoding
+	// Frame capture loop
 	ticker := time.NewTicker(time.Second / time.Duration(*fps))
 	defer ticker.Stop()
+
+	// Start H.264 streaming goroutine (reads from FFmpeg stdout → RTP)
+	var stopStream chan struct{}
+	if *h264Mode && h264enc != nil && videoTrack != nil {
+		stopStream = make(chan struct{})
+		go h264enc.StreamToTrack(videoTrack, stopStream)
+		defer func() { close(stopStream); h264enc.Close() }()
+	}
 
 	encoder := NewDiffEncoder(*jpegQuality)
 	var frameCount uint64
@@ -407,8 +446,15 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 			continue
 		}
 
-		pkt := encoder.EncodeDiff(img, bounds, frameCount)
+		// H.264 path: send raw frame to FFmpeg encoder (async pipe write)
+		if *h264Mode && h264enc != nil {
+			if err := h264enc.Encode(img); err != nil {
+				log.Printf("H.264 encode error: %v", err)
+			}
+		}
 
+		// JPEG diff fallback (always sent for clients without H.264 support)
+		pkt := encoder.EncodeDiff(img, bounds, frameCount)
 		if gotScreen != nil && gotScreen.ReadyState() == webrtc.DataChannelStateOpen {
 			gotScreen.Send(pkt)
 		}

@@ -65,7 +65,7 @@
     59|  <span id="status">Idle</span>
     60|</div>
     61|
-    62|<div id="viewport"><canvas id="canvas"></canvas></div>
+    62|<div id="viewport"><canvas id="canvas"></canvas><video id="remoteVideo" autoplay playsinline muted style="display:none;max-width:100%;max-height:100%"></video></div>
     63|
     64|<!-- Loading overlay -->
     65|<div class="overlay" id="loadingOverlay">
@@ -282,6 +282,24 @@ function resetStats() {
    258|    }
    259|  };
    260|
+  // H.264 video track (primary streaming path) — v0.8
+  pc.ontrack = (event) => {
+    const stream = event.streams[0];
+    if (!stream) return;
+    const rv = document.getElementById('remoteVideo');
+    rv.srcObject = stream;
+    canvas.style.display = "none";
+    rv.style.display = "";
+    rv.onloadedmetadata = () => {
+      rv.play().catch(() => {});
+      overlay(false);
+      wasConnected = true;
+      resetStats();
+      statsUpdateTimer = setInterval(updateStats, 1000);
+      document.getElementById('statsBar').style.display = '';
+      status('🎥 H.264 Streaming', 'var(--green)');
+    };
+  };
    261|  pc.onicecandidate = (e) => {
    262|    if (e.candidate) {
    263|      ws.send(JSON.stringify({
