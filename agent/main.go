@@ -29,6 +29,8 @@ var (
 	password    = flag.String("pass", "", "Connection password (overrides config)")
 	alias       = flag.String("alias", "", "Display alias (e.g. 'PC Bureau')")
 	h264Mode    = flag.Bool("h264", true, "Use H.264 hardware encoding (fallback: JPEG diff)")
+	displayIdx  = flag.Int("display", 0, "Display index to capture (0=primary)")
+	captureAll  = flag.Bool("all", false, "Capture all displays as one virtual desktop")
 )
 
 // ── Config ───────────────────────────────────────────────────
@@ -166,8 +168,16 @@ func main() {
 	})
 	log.Printf("Registered to signaling server")
 
-	bounds := screenshot.GetDisplayBounds(0)
-	log.Printf("Display: %dx%d @ %d FPS  JPEG Q=%d", bounds.Dx(), bounds.Dy(), *fps, *jpegQuality)
+	// Display selection
+	ndisplays := screenshot.NumActiveDisplays()
+	bounds := getCaptureBounds(*displayIdx, *captureAll, ndisplays)
+	log.Printf("Display: %dx%d @ %d FPS  JPEG Q=%d  (%d display(s) available)",
+		bounds.Dx(), bounds.Dy(), *fps, *jpegQuality, ndisplays)
+	if *captureAll {
+		log.Printf("   Multi-monitor: composited %d display(s) into %dx%d", ndisplays, bounds.Dx(), bounds.Dy())
+	} else {
+		log.Printf("   Capturing display %d/%d", *displayIdx, ndisplays)
+	}
 
 	// Build ICE servers list
 	iceServers := []webrtc.ICEServer{
@@ -195,7 +205,7 @@ func main() {
 
 		switch msg.Type {
 		case "client_hello":
-			go handleSession(conn, msg.From, cfg, bounds, iceServers)
+			go handleSession(conn, msg.From, cfg, bounds, iceServers, ndisplays)
 		case "pong":
 		}
 	}
@@ -203,7 +213,7 @@ func main() {
 
 // ── P2P Session ────────────────────────────────────────────────
 
-func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds image.Rectangle, iceServers []webrtc.ICEServer) {
+func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds image.Rectangle, iceServers []webrtc.ICEServer, ndisplays int) {
 	log.Printf("🔗 Client: %s — establishing P2P", clientID)
 
 	// Password challenge if configured
@@ -441,7 +451,15 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 	var frameCount uint64
 
 	for range ticker.C {
-		img, err := screenshot.CaptureRect(bounds)
+		var img image.Image
+		var err error
+
+		// Multi-monitor compositing or single display capture
+		if *captureAll && ndisplays > 1 {
+			img, err = captureAllDisplays(bounds)
+		} else {
+			img, err = screenshot.CaptureRect(bounds)
+		}
 		if err != nil {
 			continue
 		}
@@ -537,6 +555,65 @@ func handleClipboardReceive(data []byte) {
 		cb := newClipboard()
 		cb.SetText(msg["text"])
 		log.Printf("📋 Clipboard synced: %d chars", len(msg["text"]))
+	}
+}
+
+// ── Multi-Monitor ──────────────────────────────────────────
+
+// getCaptureBounds returns the rectangle to capture based on display flags.
+func getCaptureBounds(idx int, all bool, ndisplays int) image.Rectangle {
+	if all && ndisplays > 1 {
+		// Compute bounding box of all displays
+		minX, minY := 0, 0
+		maxX, maxY := 0, 0
+		for i := 0; i < ndisplays; i++ {
+			b := screenshot.GetDisplayBounds(i)
+			if b.Min.X < minX {
+				minX = b.Min.X
+			}
+			if b.Min.Y < minY {
+				minY = b.Min.Y
+			}
+			if b.Max.X > maxX {
+				maxX = b.Max.X
+			}
+			if b.Max.Y > maxY {
+				maxY = b.Max.Y
+			}
+		}
+		return image.Rect(minX, minY, maxX, maxY)
+	}
+	// Single display
+	if idx >= 0 && idx < ndisplays {
+		return screenshot.GetDisplayBounds(idx)
+	}
+	return screenshot.GetDisplayBounds(0)
+}
+
+// captureAllDisplays captures all active displays composited into one image.
+func captureAllDisplays(bounds image.Rectangle) (image.Image, error) {
+	// Create composite canvas
+	composite := image.NewRGBA(bounds)
+	ndisplays := screenshot.NumActiveDisplays()
+	for i := 0; i < ndisplays; i++ {
+		img, err := screenshot.CaptureDisplay(i)
+		if err != nil {
+			continue
+		}
+		db := screenshot.GetDisplayBounds(i)
+		// Draw this display into the composite at its offset position
+		drawImageAt(composite, img, db.Min.X-bounds.Min.X, db.Min.Y-bounds.Min.Y)
+	}
+	return composite, nil
+}
+
+// drawImageAt copies src into dst at the given offset.
+func drawImageAt(dst *image.RGBA, src image.Image, offsetX, offsetY int) {
+	srcBounds := src.Bounds()
+	for y := 0; y < srcBounds.Dy(); y++ {
+		for x := 0; x < srcBounds.Dx(); x++ {
+			dst.Set(offsetX+x, offsetY+y, src.At(srcBounds.Min.X+x, srcBounds.Min.Y+y))
+		}
 	}
 }
 
