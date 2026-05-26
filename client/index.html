@@ -256,7 +256,7 @@ const SIGNAL=(()=>{
 const config={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
 const remoteFiles=new Map();
 let img=new Image();
-let reconnectAttempts=0,reconnectTimer=null,wasConnected=false;
+let reconnectAttempts=0,reconnectTimer=null,wasConnected=false,iceRetries=0;
 let statsBytes=0,statsFrames=0,statsStart=Date.now(),statsFPS=0,statsUpdateTimer=null;
 
 function updateStats(){
@@ -283,7 +283,7 @@ async function connect(){
   if(!agentId&&!savedAgentId)return alert('Enter Agent ID');
   if(!agentId)$('agentId').value=savedAgentId;
   const targetId=agentId||savedAgentId;
-  pendingAgentId=targetId;savedAgentId=targetId;
+  pendingAgentId=targetId;savedAgentId=targetId;iceRetries=0;
   overlay(true,'Signaling...');status('Signaling...','var(--accent)');
   ws=new WebSocket(SIGNAL);
   ws.onopen=()=>{
@@ -342,7 +342,14 @@ async function submitPassword(){
 async function handleOffer(msg,agentId){
   pc=new RTCPeerConnection(config);
   let _connected=false;
-  const markConnected=()=>{_connected=true;clearTimeout(handshakeTimer);};
+  const markConnected=()=>{_connected=true;clearTimeout(handshakeTimer);iceRetries=0;};
+  const retryOnFail=()=>{
+    if(iceRetries>=3){status('❌ Connection failed after 3 retries','var(--red)');overlay(false);return;}
+    iceRetries++;
+    clearTimeout(handshakeTimer);
+    status('⚠️ ICE failed — retry '+iceRetries+'/3...','var(--red)');
+    disconnect();setTimeout(connect,1000);
+  };
   const inputDC=pc.createDataChannel('input');_inputDC=inputDC;
   inputDC.onopen=()=>status('⚡ P2P Ready','var(--green)');
   pc.ondatachannel=(event)=>{
@@ -375,16 +382,17 @@ async function handleOffer(msg,agentId){
   };
   // Connection failure detection with auto-retry
   let handshakeTimer=setTimeout(()=>{
-    if(!_connected){status('⚠️ Handshake timeout','var(--red)');disconnect();}
+    if(!_connected){retryOnFail();}
   },30000);
   pc.oniceconnectionstatechange=()=>{
+    $('status').textContent='🔗 '+pc.iceConnectionState;
     if(pc.iceConnectionState==='failed'||pc.iceConnectionState==='disconnected'){
-      if(!_connected){clearTimeout(handshakeTimer);status('⚠️ ICE failed — retrying...','var(--red)');disconnect();setTimeout(connect,2000);}
+      if(!_connected)retryOnFail();
     }
   };
   pc.onconnectionstatechange=()=>{
     if(pc.connectionState==='connected'||pc.connectionState==='completed'){markConnected();}
-    if(pc.connectionState==='failed'&&!_connected){clearTimeout(handshakeTimer);status('⚠️ Connection failed — retrying...','var(--red)');disconnect();setTimeout(connect,2000);}
+    if(pc.connectionState==='failed'&&!_connected)retryOnFail();
   };
   const offer=P(msg.payload);
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
@@ -537,7 +545,7 @@ function toggleQR(){
 // ── Disconnect ──
 function disconnect(){
   if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}
-  wasConnected=false;savedAgentId='';
+  wasConnected=false;savedAgentId='';iceRetries=0;
   if(_inputDC)_inputDC.close();if(screenDC)screenDC.close();
   if(fileDC)fileDC.close();if(clipboardDC)clipboardDC.close();
   if(pc)pc.close();if(ws)ws.close();
