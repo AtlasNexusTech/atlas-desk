@@ -1,4 +1,4 @@
-// Atlas Desk Agent v0.7 — Tray icon + auto-reconnect + aliases + settings
+// Atlas Desk Agent v0.9 — H.264 + multi-monitor + single-reader dispatch + password auth
 package main
 
 import (
@@ -14,6 +14,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -31,6 +32,8 @@ var (
 	h264Mode    = flag.Bool("h264", true, "Use H.264 hardware encoding (fallback: JPEG diff)")
 	displayIdx  = flag.Int("display", 0, "Display index to capture (0=primary)")
 	captureAll  = flag.Bool("all", false, "Capture all displays as one virtual desktop")
+
+	sendMu sync.Mutex // protects conn.WriteMessage (one writer gorilla constraint)
 )
 
 // ── Config ───────────────────────────────────────────────────
@@ -139,7 +142,7 @@ func main() {
 
 	cfg := loadConfig()
 
-	log.Printf("◆ Atlas Desk Agent v0.7  ID: %s", cfg.ID)
+	log.Printf("◆ Atlas Desk Agent v0.9  ID: %s", cfg.ID)
 	if cfg.Alias != "" {
 		log.Printf("   Alias: %s", cfg.Alias)
 	}
@@ -194,7 +197,8 @@ func main() {
 		log.Printf("🔄 TURN: %d server(s) configured", len(cfg.TurnServers))
 	}
 
-	// Wait for client, then set up P2P
+	// Single reader: dispatch messages to active session channels
+	sessions := sync.Map{} // clientID → chan SignalMsg
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
@@ -205,7 +209,17 @@ func main() {
 
 		switch msg.Type {
 		case "client_hello":
-			go handleSession(conn, msg.From, cfg, bounds, iceServers, ndisplays)
+			ch := make(chan SignalMsg, 32)
+			sessions.Store(msg.From, ch)
+			go handleSession(conn, msg.From, cfg, bounds, iceServers, ndisplays, ch)
+		case "auth_response", "answer", "ice_candidate":
+			if ch, ok := sessions.Load(msg.From); ok {
+				select {
+				case ch.(chan SignalMsg) <- msg:
+				default:
+					log.Printf("⚠ session channel full for %s, dropping %s", msg.From, msg.Type)
+				}
+			}
 		case "pong":
 		}
 	}
@@ -213,7 +227,7 @@ func main() {
 
 // ── P2P Session ────────────────────────────────────────────────
 
-func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds image.Rectangle, iceServers []webrtc.ICEServer, ndisplays int) {
+func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds image.Rectangle, iceServers []webrtc.ICEServer, ndisplays int, recvCh <-chan SignalMsg) {
 	log.Printf("🔗 Client: %s — establishing P2P", clientID)
 
 	// Password challenge if configured
@@ -226,20 +240,13 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 		})
 		log.Printf("🔒 Sent auth challenge to %s", clientID)
 
-		// Wait for auth response
+		// Wait for auth response (via shared recvCh, not conn.ReadMessage)
 		var authOk bool
-		for {
-			_, raw, err := conn.ReadMessage()
-			if err != nil {
-				return
-			}
-			var msg SignalMsg
-			json.Unmarshal(raw, &msg)
+		for msg := range recvCh {
 			if msg.Type == "auth_response" && msg.From == clientID {
 				var resp AuthResponse
 				json.Unmarshal(msg.Payload, &resp)
 				expectedHash := hashPassword(cfg.Password + token)
-				// Proof = SHA256(stored_hash + token) sent from client
 				if resp.Proof == expectedHash {
 					authOk = true
 					log.Printf("✅ Auth OK from %s", clientID)
@@ -381,18 +388,12 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 		Payload: mustJSON(SDPMsg{SDP: offer.SDP, Type: "offer"}),
 	})
 
-	// Receive answer + ICE
+	// Receive answer + ICE from shared recvCh (single-reader dispatch)
 	answerCh := make(chan webrtc.SessionDescription)
 	iceCh := make(chan webrtc.ICECandidateInit)
 
 	go func() {
-		for {
-			_, raw, err := conn.ReadMessage()
-			if err != nil {
-				return
-			}
-			var msg SignalMsg
-			json.Unmarshal(raw, &msg)
+		for msg := range recvCh {
 			switch msg.Type {
 			case "answer":
 				var sdp SDPMsg
@@ -620,6 +621,8 @@ func drawImageAt(dst *image.RGBA, src image.Image, offsetX, offsetY int) {
 // ── Helpers ─────────────────────────────────────────────────
 
 func sendSignal(conn *websocket.Conn, msg SignalMsg) {
+	sendMu.Lock()
+	defer sendMu.Unlock()
 	data, _ := json.Marshal(msg)
 	conn.WriteMessage(websocket.TextMessage, data)
 }

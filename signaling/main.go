@@ -1,7 +1,8 @@
-// Atlas Desk Signaling Server v0.2 — alias resolution + password awareness
+// Atlas Desk Signaling Server v0.9 — alias resolution + password auth + embedded client + single-reader
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -42,7 +43,18 @@ var (
 	aliasIndex = sync.Map{} // alias → id
 )
 
+//go:embed index.html
+var clientHTML string
+
 func main() {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(clientHTML))
+	})
 	http.HandleFunc("/ws", handleWS)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
@@ -63,7 +75,7 @@ func main() {
 	})
 
 	port := ":8800"
-	log.Printf("◆ Atlas Desk signaling v0.2 on %s", port)
+	log.Printf("◆ Atlas Desk signaling v0.9 on %s", port)
 	log.Fatal(http.ListenAndServe(port, nil))
 }
 
@@ -167,6 +179,7 @@ func resolveTarget(target string) string {
 }
 
 func relayTo(targetID string, msg Message) {
+	targetID = resolveTarget(targetID)
 	if target, ok := agents.Load(targetID); ok {
 		sendJSON(target.(*Peer), msg)
 		return
