@@ -271,8 +271,14 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 		}
 	}
 
+	// Use SettingEngine to enable TCP ICE candidates (fallback when UDP blocked)
+	s := webrtc.SettingEngine{}
+	s.SetNetworkTypes([]webrtc.NetworkType{webrtc.NetworkTypeUDP4, webrtc.NetworkTypeTCP4})
+	s.SetICETCPMux(webrtc.NewICETCPMux(nil, nil, 8))
+	api := webrtc.NewAPI(webrtc.WithSettingEngine(s))
+
 	config := webrtc.Configuration{ICEServers: iceServers}
-	pc, err := webrtc.NewPeerConnection(config)
+	pc, err := api.NewPeerConnection(config)
 	if err != nil {
 		log.Printf("PC error: %v", err)
 		return
