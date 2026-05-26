@@ -221,14 +221,30 @@ function toggleTheme(){
   document.getElementById('themeToggle').textContent=s==='light'?'🌙':'☀️';
 })();
 
+// ── UI helpers ──
+function $(id){return document.getElementById(id)}
+function status(s,color){const el=$('status');el.textContent=s;if(color)el.style.color=color}
+function overlay(show,text){
+  $('loadingOverlay').style.display=show?'flex':'none';
+  if(text)$('loadingText').textContent=text;
+}
+// Safe payload parser: handles both raw objects and JSON strings
+function P(p){return typeof p==='string'?JSON.parse(p):p||{}}
+
 // ── State ──
 let ws,pc,screenDC,fileDC,clipboardDC,_inputDC;
+let savedAgentId='',pendingAgentId=null,authToken=null;
 let myId='viewer-'+Date.now().toString(36);
 let canvas=document.getElementById('canvas');
 let ctx=canvas.getContext('2d');
 const SIGNAL=(()=>{
   const p=new URLSearchParams(window.location.search);
-  return p.get('signal')||localStorage.getItem('atlas-desk-signal')||'ws://localhost:8800/ws';
+  if(p.get('signal'))return p.get('signal');
+  const saved=localStorage.getItem('atlas-desk-signal');
+  if(saved)return saved;
+  // Default to current host (works from LAN, Tailscale, or localhost)
+  const proto=location.protocol==='https:'?'wss':'ws';
+  return proto+'://'+location.host+'/ws';
 })();
 // Pre-fill agent from URL ?agent=LOQ and optionally auto-connect
 (()=>{
@@ -241,7 +257,6 @@ const config={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
 const remoteFiles=new Map();
 let img=new Image();
 let reconnectAttempts=0,reconnectTimer=null,wasConnected=false;
-let savedAgentId='',pendingAgentId=null,authToken=null;
 let statsBytes=0,statsFrames=0,statsStart=Date.now(),statsFPS=0,statsUpdateTimer=null;
 
 function updateStats(){
@@ -254,16 +269,6 @@ function resetStats(){
   statsBytes=0;statsFrames=0;statsStart=Date.now();
   if(statsUpdateTimer)clearInterval(statsUpdateTimer);
 }
-
-// ── UI helpers ──
-function $(id){return document.getElementById(id)}
-function status(s,color){const el=$('status');el.textContent=s;if(color)el.style.color=color}
-function overlay(show,text){
-  $('loadingOverlay').style.display=show?'flex':'none';
-  if(text)$('loadingText').textContent=text;
-}
-// Safe payload parser: handles both raw objects and JSON strings
-function P(p){return typeof p==='string'?JSON.parse(p):p||{}}
 
 // ── SHA-256 ──
 async function sha256(str){
