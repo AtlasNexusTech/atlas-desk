@@ -253,7 +253,7 @@ const SIGNAL=(()=>{
   if(a){$('agentId').value=a;savedAgentId=a}
   if(a||p.has('auto'))setTimeout(connect,500);
 })();
-const config={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
+const config={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443'],username:'openrelayproject',credential:'openrelayproject'}]};
 const remoteFiles=new Map();
 let img=new Image();
 let reconnectAttempts=0,reconnectTimer=null,wasConnected=false,iceRetries=0,_retrying=false;
