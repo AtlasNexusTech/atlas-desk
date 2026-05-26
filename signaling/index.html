@@ -341,13 +341,15 @@ async function submitPassword(){
 
 async function handleOffer(msg,agentId){
   pc=new RTCPeerConnection(config);
+  let _connected=false;
+  const markConnected=()=>{_connected=true;clearTimeout(handshakeTimer);};
   const inputDC=pc.createDataChannel('input');_inputDC=inputDC;
   inputDC.onopen=()=>status('⚡ P2P Ready','var(--green)');
   pc.ondatachannel=(event)=>{
     const dc=event.channel;
     if(dc.label==='screen'){
       screenDC=dc;dc.onmessage=handleScreenFrame;dc.binaryType='arraybuffer';
-      dc.onopen=()=>{overlay(false);wasConnected=true;resetStats();statsUpdateTimer=setInterval(updateStats,1000);$('statsBar').style.display='';status('⚡ Streaming','var(--green)')};
+      dc.onopen=()=>{markConnected();overlay(false);wasConnected=true;resetStats();statsUpdateTimer=setInterval(updateStats,1000);$('statsBar').style.display='';status('⚡ Streaming','var(--green)')};
     }else if(dc.label==='files'){
       fileDC=dc;dc.onmessage=handleFileMsg;
       dc.onopen=()=>{$('fileBtn').style.display=''};
@@ -361,6 +363,7 @@ async function handleOffer(msg,agentId){
     const rv=document.getElementById('remoteVideo');
     rv.srcObject=stream;canvas.style.display='none';rv.style.display='';
     rv.onloadedmetadata=()=>{
+      markConnected();
       rv.play().catch(()=>{});overlay(false);wasConnected=true;resetStats();
       statsUpdateTimer=setInterval(updateStats,1000);
       document.getElementById('statsBar').style.display='';
@@ -369,6 +372,19 @@ async function handleOffer(msg,agentId){
   };
   pc.onicecandidate=(e)=>{
     if(e.candidate)ws.send(JSON.stringify({type:'ice_candidate',target:agentId,payload:{candidate:e.candidate.candidate,sdpMid:e.candidate.sdpMid}}));
+  };
+  // Connection failure detection with auto-retry
+  let handshakeTimer=setTimeout(()=>{
+    if(!_connected){status('⚠️ Handshake timeout','var(--red)');disconnect();}
+  },30000);
+  pc.oniceconnectionstatechange=()=>{
+    if(pc.iceConnectionState==='failed'||pc.iceConnectionState==='disconnected'){
+      if(!_connected){clearTimeout(handshakeTimer);status('⚠️ ICE failed — retrying...','var(--red)');disconnect();setTimeout(connect,2000);}
+    }
+  };
+  pc.onconnectionstatechange=()=>{
+    if(pc.connectionState==='connected'||pc.connectionState==='completed'){markConnected();}
+    if(pc.connectionState==='failed'&&!_connected){clearTimeout(handshakeTimer);status('⚠️ Connection failed — retrying...','var(--red)');disconnect();setTimeout(connect,2000);}
   };
   const offer=P(msg.payload);
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
