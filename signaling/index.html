@@ -144,7 +144,7 @@ body{
 <body>
 <div id="topbar">
 <span class="logo">◆ Atlas Desk <span style="font-size:11px;opacity:0.5;margin-left:4px">v0.9</span></span>
-<input id="agentId" placeholder="LOQ" maxlength="40" autocomplete="off">
+<input id="agentId" placeholder="LOQ" maxlength="40" autocomplete="off" value="LOQ">
 <button class="btn-connect" id="connectBtn" onclick="connect()">Connect</button>
 <button class="btn-disconnect" id="disconnectBtn" onclick="disconnect()" style="display:none">✕</button>
 <button class="btn-file" id="fileBtn" onclick="toggleFiles()" style="display:none" title="File Transfer">📁</button>
@@ -255,6 +255,8 @@ function overlay(show,text){
   $('loadingOverlay').style.display=show?'flex':'none';
   if(text)$('loadingText').textContent=text;
 }
+// Safe payload parser: handles both raw objects and JSON strings
+function P(p){return typeof p==='string'?JSON.parse(p):p||{}}
 
 // ── SHA-256 ──
 async function sha256(str){
@@ -280,19 +282,19 @@ async function connect(){
     const msg=JSON.parse(e.data);
     switch(msg.type){
       case'auth_challenge':
-        authToken=JSON.parse(msg.payload).token;
+        authToken=P(msg.payload).token;
         $('passDialog').style.display='flex';
         $('passError').style.display='none';
         $('passInput').value='';$('passInput').focus();
         status('🔒 Password required','var(--accent)');
         break;
       case'auth_failed':
-        $('passError').textContent=JSON.parse(msg.payload).reason==='wrong_password'?'Wrong password':'Auth failed';
+        $('passError').textContent=P(msg.payload).reason==='wrong_password'?'Wrong password':'Auth failed';
         $('passError').style.display='block';
         status('❌ Wrong password','var(--red)');
         break;
       case'error':
-        const p=JSON.parse(msg.payload||'{}');
+        const p=P(msg.payload);
         if(p.reason==='target_not_found'){
           status('❌ Not found: "'+p.target+'"','var(--red)');
           overlay(false);disconnect();
@@ -302,7 +304,7 @@ async function connect(){
         await handleOffer(msg,agentId);
         break;
       case'ice_candidate':
-        if(pc&&msg.payload)pc.addIceCandidate(new RTCIceCandidate(JSON.parse(msg.payload)));
+        if(pc&&msg.payload)pc.addIceCandidate(new RTCIceCandidate(P(msg.payload)));
         break;
     }
   };
@@ -356,7 +358,7 @@ async function handleOffer(msg,agentId){
   pc.onicecandidate=(e)=>{
     if(e.candidate)ws.send(JSON.stringify({type:'ice_candidate',target:agentId,payload:{candidate:e.candidate.candidate,sdpMid:e.candidate.sdpMid}}));
   };
-  const offer=JSON.parse(msg.payload);
+  const offer=P(msg.payload);
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
   const answer=await pc.createAnswer();
   await pc.setLocalDescription(answer);
