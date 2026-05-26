@@ -233,7 +233,7 @@ function P(p){return typeof p==='string'?JSON.parse(p):p||{}}
 
 // ── State ──
 let ws,pc,screenDC,fileDC,clipboardDC,_inputDC;
-let savedAgentId='',pendingAgentId=null,authToken=null;
+let savedAgentId='',pendingAgentId=null,authToken=null,_savedPassword=null;
 let myId='viewer-'+Date.now().toString(36);
 let canvas=document.getElementById('canvas');
 let ctx=canvas.getContext('2d');
@@ -297,10 +297,18 @@ async function connect(){
     switch(msg.type){
       case'auth_challenge':
         authToken=P(msg.payload).token;
-        $('passDialog').style.display='flex';
-        $('passError').style.display='none';
-        $('passInput').value='';$('passInput').focus();
-        status('🔒 Password required','var(--accent)');
+        if(_savedPassword){
+          // Auto-submit during retry — don't show password dialog again
+          const pwHash=await sha256(_savedPassword);
+          const proof=await sha256(pwHash+authToken);
+          ws.send(JSON.stringify({type:'auth_response',target:pendingAgentId,from:myId,payload:{proof}}));
+          overlay(true,'Authenticating...');status('Authenticating...','var(--accent)');
+        }else{
+          $('passDialog').style.display='flex';
+          $('passError').style.display='none';
+          $('passInput').value='';$('passInput').focus();
+          status('🔒 Password required','var(--accent)');
+        }
         break;
       case'auth_failed':
         $('passError').textContent=P(msg.payload).reason==='wrong_password'?'Wrong password':'Auth failed';
@@ -334,6 +342,7 @@ async function connect(){
 
 async function submitPassword(){
   const pass=$('passInput').value;if(!pass)return;
+  _savedPassword=pass;
   $('passDialog').style.display='none';
   const pwHash=await sha256(pass);
   const proof=await sha256(pwHash+authToken);
@@ -403,6 +412,7 @@ async function handleOffer(msg,agentId){
   const answer=await pc.createAnswer();
   await pc.setLocalDescription(answer);
   ws.send(JSON.stringify({type:'answer',target:agentId,payload:{sdp:answer.sdp,type:'answer'}}));
+  _retrying=false;
   status('Handshake...','var(--accent)');
 }
 
@@ -549,7 +559,7 @@ function toggleQR(){
 // ── Disconnect ──
 function disconnect(){
   if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}
-  wasConnected=false;savedAgentId='';_retrying=false;
+  wasConnected=false;savedAgentId='';
   if(_inputDC)_inputDC.close();if(screenDC)screenDC.close();
   if(fileDC)fileDC.close();if(clipboardDC)clipboardDC.close();
   if(pc)pc.close();if(ws)ws.close();
