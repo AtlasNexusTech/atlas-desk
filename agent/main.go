@@ -228,6 +228,11 @@ func main() {
 // ── P2P Session ────────────────────────────────────────────────
 
 func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds image.Rectangle, iceServers []webrtc.ICEServer, ndisplays int, recvCh <-chan SignalMsg) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("💥 PANIC in session %s: %v", clientID, r)
+		}
+	}()
 	log.Printf("🔗 Client: %s — establishing P2P", clientID)
 
 	// Password challenge if configured
