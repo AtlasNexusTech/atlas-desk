@@ -12,8 +12,10 @@ import (
 	"image"
 	"log"
 	"math/big"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -133,6 +135,38 @@ type FrameMeta struct {
 	W     int   `json:"w"`
 	H     int   `json:"h"`
 	Frame uint64 `json:"f"`
+}
+
+// ── Network Detection ────────────────────────────────────────
+
+func detectLocalIPs() []string {
+	// Priority: real LAN/WiFi IPs, skip VPNs, Docker, WSL, virtual adapters
+	interfaces, _ := net.Interfaces()
+	var ips []string
+	for _, iface := range interfaces {
+		// Skip loopback, down, virtual adapters
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			ipnet, ok := addr.(*net.IPNet)
+			if !ok || ipnet.IP.IsLoopback() || ipnet.IP.To4() == nil {
+				continue
+			}
+			ip := ipnet.IP.String()
+			// Skip VPNs (Proton, Tailscale), Docker bridges, WSL, APIPA
+			if strings.HasPrefix(ip, "10.2.") || strings.HasPrefix(ip, "172.") ||
+				strings.HasPrefix(ip, "169.254.") || strings.HasPrefix(ip, "100.") {
+				continue
+			}
+			// Accept: 10.158.x.x (WiFi), 192.168.x.x (LAN)
+			if strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "192.168.") {
+				ips = append(ips, ip)
+			}
+		}
+	}
+	return ips
 }
 
 // ── Main ───────────────────────────────────────────────────────
@@ -271,10 +305,16 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 		}
 	}
 
-	// Use SettingEngine to enable TCP ICE candidates (fallback when UDP blocked)
+	// Use SettingEngine to enable TCP ICE + force correct network interface
 	s := webrtc.SettingEngine{}
 	s.SetNetworkTypes([]webrtc.NetworkType{webrtc.NetworkTypeUDP4, webrtc.NetworkTypeTCP4})
 	s.SetICETCPMux(webrtc.NewICETCPMux(nil, nil, 8))
+	// Detect the real WiFi/LAN IP (skip VPNs, Docker, WSL virtual adapters)
+	detectIPs := detectLocalIPs()
+	if len(detectIPs) > 0 {
+		s.SetNAT1To1IPs(detectIPs, webrtc.ICECandidateTypeHost)
+		log.Printf("🌐 ICE bound to: %v", detectIPs)
+	}
 	api := webrtc.NewAPI(webrtc.WithSettingEngine(s))
 
 	config := webrtc.Configuration{ICEServers: iceServers}
