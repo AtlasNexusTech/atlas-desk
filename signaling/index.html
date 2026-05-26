@@ -256,7 +256,7 @@ const SIGNAL=(()=>{
 const config={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
 const remoteFiles=new Map();
 let img=new Image();
-let reconnectAttempts=0,reconnectTimer=null,wasConnected=false,iceRetries=0;
+let reconnectAttempts=0,reconnectTimer=null,wasConnected=false,iceRetries=0,_retrying=false;
 let statsBytes=0,statsFrames=0,statsStart=Date.now(),statsFPS=0,statsUpdateTimer=null;
 
 function updateStats(){
@@ -283,7 +283,9 @@ async function connect(){
   if(!agentId&&!savedAgentId)return alert('Enter Agent ID');
   if(!agentId)$('agentId').value=savedAgentId;
   const targetId=agentId||savedAgentId;
-  pendingAgentId=targetId;savedAgentId=targetId;iceRetries=0;
+  pendingAgentId=targetId;savedAgentId=targetId;
+  // Only reset retries on fresh user-initiated connect, not auto-retry
+  if(!_retrying)iceRetries=0;
   overlay(true,'Signaling...');status('Signaling...','var(--accent)');
   ws=new WebSocket(SIGNAL);
   ws.onopen=()=>{
@@ -342,12 +344,14 @@ async function submitPassword(){
 async function handleOffer(msg,agentId){
   pc=new RTCPeerConnection(config);
   let _connected=false;
-  const markConnected=()=>{_connected=true;clearTimeout(handshakeTimer);iceRetries=0;};
+  const markConnected=()=>{_connected=true;_retrying=false;clearTimeout(handshakeTimer);iceRetries=0;};
   const retryOnFail=()=>{
-    if(iceRetries>=3){status('❌ Connection failed after 3 retries','var(--red)');overlay(false);return;}
+    if(_retrying)return;
+    if(iceRetries>=3){_retrying=false;status("❌ Connection failed after 3 retries","var(--red)");overlay(false);return;}
+    _retrying=true;
     iceRetries++;
     clearTimeout(handshakeTimer);
-    status('⚠️ ICE failed — retry '+iceRetries+'/3...','var(--red)');
+    status("⚠️ ICE failed — retry "+iceRetries+"/3...","var(--red)");
     disconnect();setTimeout(connect,1000);
   };
   const inputDC=pc.createDataChannel('input');_inputDC=inputDC;
@@ -545,7 +549,7 @@ function toggleQR(){
 // ── Disconnect ──
 function disconnect(){
   if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}
-  wasConnected=false;savedAgentId='';iceRetries=0;
+  wasConnected=false;savedAgentId='';_retrying=false;
   if(_inputDC)_inputDC.close();if(screenDC)screenDC.close();
   if(fileDC)fileDC.close();if(clipboardDC)clipboardDC.close();
   if(pc)pc.close();if(ws)ws.close();
