@@ -23,6 +23,9 @@ jobs:
             ext: ".exe"
             artifact: atlas-desk-agent-windows-amd64
     runs-on: ${{ matrix.os }}
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
     defaults:
       run:
         working-directory: agent
@@ -31,11 +34,11 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Build agent
         run: |
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o atlas-desk-agent${{ matrix.ext }} .
+          go build -ldflags="-s -w" -o atlas-desk-agent${{ matrix.ext }} .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -59,6 +62,9 @@ jobs:
             ext: ".exe"
             artifact: atlas-desk-signaling-windows-amd64
     runs-on: ${{ matrix.os }}
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
     defaults:
       run:
         working-directory: signaling
@@ -67,11 +73,11 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Build signaling
         run: |
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o atlas-desk-signaling${{ matrix.ext }} .
+          go build -ldflags="-s -w" -o atlas-desk-signaling${{ matrix.ext }} .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

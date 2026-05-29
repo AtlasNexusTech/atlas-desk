@@ -305,10 +305,20 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 		}
 	}
 
-	// Use SettingEngine to enable TCP ICE + force correct network interface
+	// Use SettingEngine to force the correct network interface. ICE-TCP needs a
+	// real listener: passing nil to NewICETCPMux compiles but breaks candidate
+	// gathering at runtime, so keep TCP optional and fall back to UDP-only if the
+	// listener cannot be created.
 	s := webrtc.SettingEngine{}
-	s.SetNetworkTypes([]webrtc.NetworkType{webrtc.NetworkTypeUDP4, webrtc.NetworkTypeTCP4})
-	s.SetICETCPMux(webrtc.NewICETCPMux(nil, nil, 8))
+	networkTypes := []webrtc.NetworkType{webrtc.NetworkTypeUDP4}
+	if tcpListener, err := net.Listen("tcp4", ":0"); err == nil {
+		defer tcpListener.Close()
+		s.SetICETCPMux(webrtc.NewICETCPMux(nil, tcpListener, 8))
+		networkTypes = append(networkTypes, webrtc.NetworkTypeTCP4)
+	} else {
+		log.Printf("⚠ ICE-TCP disabled: %v", err)
+	}
+	s.SetNetworkTypes(networkTypes)
 	// Detect the real WiFi/LAN IP (skip VPNs, Docker, WSL virtual adapters)
 	detectIPs := detectLocalIPs()
 	if len(detectIPs) > 0 {
@@ -535,8 +545,26 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 // ── File Receive ────────────────────────────────────────────
 
 var activeReceives = make(map[string]*os.File)
+var activeReceivesMu sync.Mutex
 
 func handleFileReceive(data []byte) {
+	if len(data) == 0 {
+		return
+	}
+
+	// Browser DataChannels send small control messages (file_start/file_end)
+	// as UTF-8 JSON strings, while file chunks use the binary packet format:
+	// [4B metaLen][JSON meta][payload]. Support both shapes so file transfer is
+	// actually bidirectional instead of silently ignoring browser control frames.
+	if data[0] == '{' {
+		var meta map[string]interface{}
+		if err := json.Unmarshal(data, &meta); err != nil {
+			return
+		}
+		handleFileMeta(meta, nil)
+		return
+	}
+
 	if len(data) < 4 {
 		return
 	}
@@ -548,18 +576,34 @@ func handleFileReceive(data []byte) {
 	payload := data[4+metaLen:]
 
 	var meta map[string]interface{}
-	json.Unmarshal(metaJSON, &meta)
+	if err := json.Unmarshal(metaJSON, &meta); err != nil {
+		log.Printf("File receive error: invalid metadata: %v", err)
+		return
+	}
+	handleFileMeta(meta, payload)
+}
 
+func handleFileMeta(meta map[string]interface{}, payload []byte) {
 	msgType, _ := meta["type"].(string)
 	switch msgType {
 	case "file_start":
 		name, _ := meta["name"].(string)
+		name = filepath.Base(name)
+		if name == "." || name == string(filepath.Separator) || name == "" {
+			log.Printf("File receive error: invalid filename")
+			return
+		}
 		sizeF, _ := meta["size"].(float64)
 		fileID, _ := meta["id"].(string)
 		size := int64(sizeF)
 		log.Printf("📥 Receiving: %s (%d bytes)", name, size)
 
-		dir := filepath.Join(os.Getenv("HOME"), "Downloads", "AtlasDesk")
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			log.Printf("Home directory error: %v", err)
+			return
+		}
+		dir := filepath.Join(home, "Downloads", "AtlasDesk")
 		os.MkdirAll(dir, 0755)
 		outPath := filepath.Join(dir, name)
 		f, err := os.Create(outPath)
@@ -567,11 +611,19 @@ func handleFileReceive(data []byte) {
 			log.Printf("File create error: %v", err)
 			return
 		}
+		activeReceivesMu.Lock()
 		activeReceives[fileID] = f
+		activeReceivesMu.Unlock()
 
 	case "file_chunk":
+		if len(payload) == 0 {
+			return
+		}
 		fileID, _ := meta["id"].(string)
-		if f, ok := activeReceives[fileID]; ok {
+		activeReceivesMu.Lock()
+		f, ok := activeReceives[fileID]
+		activeReceivesMu.Unlock()
+		if ok {
 			if offsetF, ok := meta["offset"].(float64); ok {
 				offset := int64(offsetF)
 				f.WriteAt(payload, offset)
@@ -582,17 +634,27 @@ func handleFileReceive(data []byte) {
 
 	case "file_end":
 		fileID, _ := meta["id"].(string)
-		if f, ok := activeReceives[fileID]; ok {
-			f.Close()
+		activeReceivesMu.Lock()
+		f, ok := activeReceives[fileID]
+		if ok {
 			delete(activeReceives, fileID)
+		}
+		activeReceivesMu.Unlock()
+		if ok {
+			f.Close()
 			log.Printf("✅ Received: %s → ~/Downloads/AtlasDesk/", meta["name"])
 		}
 
 	case "file_error":
 		fileID, _ := meta["id"].(string)
-		if f, ok := activeReceives[fileID]; ok {
-			f.Close()
+		activeReceivesMu.Lock()
+		f, ok := activeReceives[fileID]
+		if ok {
 			delete(activeReceives, fileID)
+		}
+		activeReceivesMu.Unlock()
+		if ok {
+			f.Close()
 		}
 		log.Printf("❌ File error: %v", meta["error"])
 	}

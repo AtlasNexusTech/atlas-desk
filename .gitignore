@@ -5,3 +5,5 @@ nexdesk-agent
 *.exe
 atlas-desk-signaling
 atlas-desk-agent
+node_modules/
+app/node_modules/
