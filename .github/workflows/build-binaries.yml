@@ -113,8 +113,8 @@ jobs:
           cp atlas-desk-agent-windows-amd64/atlas-desk-agent.exe .
           zip atlas-desk-agent-windows-amd64.zip atlas-desk-agent.exe
           # Linux ARM64 agent
-          cp atlas-desk-agent-linux-arm64/atlas-desk-agent atlas-desk-agent-linux-arm64
-          tar czf atlas-desk-agent-linux-arm64.tar.gz atlas-desk-agent-linux-arm64
+          cp atlas-desk-agent-linux-arm64/atlas-desk-agent ./atlas-desk-agent-linux-arm64-bin
+          tar czf atlas-desk-agent-linux-arm64.tar.gz ./atlas-desk-agent-linux-arm64-bin
           # Linux signaling
           cp atlas-desk-signaling-linux-amd64/atlas-desk-signaling atlas-desk-signaling-linux
           tar czf atlas-desk-signaling-linux-amd64.tar.gz atlas-desk-signaling-linux
