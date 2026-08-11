@@ -22,6 +22,11 @@ jobs:
             goarch: amd64
             ext: ".exe"
             artifact: atlas-desk-agent-windows-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            ext: ""
+            artifact: atlas-desk-agent-linux-arm64
     runs-on: ${{ matrix.os }}
     env:
       GOOS: ${{ matrix.goos }}
@@ -35,6 +40,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+
+      - name: Tidy modules (sync go.sum)
+        run: go mod tidy
 
       - name: Build agent
         run: |
@@ -104,6 +112,9 @@ jobs:
           # Windows agent
           cp atlas-desk-agent-windows-amd64/atlas-desk-agent.exe .
           zip atlas-desk-agent-windows-amd64.zip atlas-desk-agent.exe
+          # Linux ARM64 agent
+          cp atlas-desk-agent-linux-arm64/atlas-desk-agent atlas-desk-agent-linux-arm64
+          tar czf atlas-desk-agent-linux-arm64.tar.gz atlas-desk-agent-linux-arm64
           # Linux signaling
           cp atlas-desk-signaling-linux-amd64/atlas-desk-signaling atlas-desk-signaling-linux
           tar czf atlas-desk-signaling-linux-amd64.tar.gz atlas-desk-signaling-linux
@@ -119,6 +130,7 @@ jobs:
           files: |
             artifacts/atlas-desk-agent-linux-amd64.tar.gz
             artifacts/atlas-desk-agent-windows-amd64.zip
+            artifacts/atlas-desk-agent-linux-arm64.tar.gz
             artifacts/atlas-desk-signaling-linux-amd64.tar.gz
             artifacts/atlas-desk-signaling-windows-amd64.zip
           generate_release_notes: true
