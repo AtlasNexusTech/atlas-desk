@@ -15,6 +15,7 @@
 | File transfer | ✅ Bidirectional |
 | Connection password | ✅ SHA-256 challenge-response |
 | Clipboard sync | ✅ Auto-sync both directions |
+| Remote terminal (PTY shell) | ✅ 💻 Bouton terminal → shell bash/cmd sur le PC cible |
 | Desktop app (Tauri) | ✅ Tray icon, minimize to tray |
 | Auto-reconnect | ✅ On connection loss |
 | Settings panel | ✅ Signal server URL |

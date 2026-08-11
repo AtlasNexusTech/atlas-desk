@@ -424,6 +424,23 @@ func handleSession(conn *websocket.Conn, clientID string, cfg *Config, bounds im
 	var gotClipboard *webrtc.DataChannel
 	clipDC.OnOpen(func() { gotClipboard = clipDC })
 
+	// Create terminal channel (bidirectional: client input → PTY, PTY output → client)
+	termDCNew, err := pc.CreateDataChannel("terminal", &webrtc.DataChannelInit{
+		Ordered: func(b bool) *bool { return &b }(true),
+	})
+	if err != nil {
+		log.Printf("terminal DC error: %v", err)
+		return
+	}
+	termDCNew.OnOpen(func() {
+		log.Println("🖥 Terminal channel open (created by agent)")
+		termDC = termDCNew
+		_ = spawnTerminal(termDCNew)
+	})
+	termDCNew.OnMessage(func(msg webrtc.DataChannelMessage) {
+		handleTerminalMessage(msg)
+	})
+
 	// ICE relay
 	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
 		if c == nil {

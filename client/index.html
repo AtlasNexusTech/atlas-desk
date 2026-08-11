@@ -148,6 +148,7 @@ body{
 <button class="btn-connect" id="connectBtn" onclick="connect()">Connect</button>
 <button class="btn-disconnect" id="disconnectBtn" onclick="disconnect()" style="display:none">✕</button>
 <button class="btn-file" id="fileBtn" onclick="toggleFiles()" style="display:none" title="File Transfer">📁</button>
+<button class="btn-file" id="termBtn" onclick="toggleTerminal()" style="display:none" title="Terminal (remote shell)">💻</button>
 <button class="btn-file" id="clipBtn" onclick="pasteToRemote()" style="display:none" title="Paste to Remote">📋</button>
 <button class="btn-file" id="settingsBtn" onclick="toggleSettings()" title="Settings">⚙️</button>
 <button class="btn-file" id="qrBtn" onclick="toggleQR()" title="QR Code for Android">📱</button>
@@ -196,6 +197,22 @@ body{
 
 <!-- Stats -->
 <div id="statsBar"><span>FPS <span class="val" id="sFPS">0</span></span><span>↓ <span class="val" id="sBW">0</span> KB/s</span><span>Type <span class="val" id="sType">-</span></span></div>
+
+<!-- Terminal Panel (remote shell) -->
+<div id="termPanel" style="display:none;position:fixed;bottom:36px;right:12px;width:min(680px,92vw);height:min(380px,60vh);background:#0d1117;border:1px solid var(--border);border-radius:10px;z-index:60;box-shadow:0 12px 40px rgba(0,0,0,.5);display:none;flex-direction:column;overflow:hidden">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#161b22;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted)">
+    <span>💻 Remote Terminal <span style="opacity:.6">(shell on target PC)</span></span>
+    <span>
+      <button onclick="termRestart()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;margin-right:6px" title="Restart shell">↻</button>
+      <button onclick="toggleTerminal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px" title="Close">✕</button>
+    </span>
+  </div>
+  <div id="termContainer" style="flex:1;padding:4px;min-height:0"></div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 
 <!-- Files -->
 <div id="filePanel">
@@ -376,6 +393,10 @@ async function handleOffer(msg,agentId){
     }else if(dc.label==='clipboard'){
       clipboardDC=dc;dc.onmessage=handleClipboardMsg;
       dc.onopen=()=>{$('clipBtn').style.display=''};
+    }else if(dc.label==='terminal'){
+      termDC=dc;
+      dc.onopen=()=>{$('termBtn').style.display='';if(termWanted)openTerminal()};
+      dc.onmessage=(ev)=>{const d=JSON.parse(ev.data);if(d.type==='terminal_output'&&term){term.write(d.data)}};
     }
   };
   pc.ontrack=(event)=>{
@@ -556,18 +577,46 @@ function toggleQR(){
   panel.style.display='block';
 }
 
+// ── Terminal (remote shell) ──
+let termDC=null,term=null,termFit=null,termWanted=false;
+
+function toggleTerminal(){
+  if($('termPanel').style.display==='none'||!$('termPanel').style.display){
+    $('termPanel').style.display='flex';termWanted=true;
+    if(termDC&&termDC.readyState==='open')openTerminal();
+    else status('💻 Terminal: waiting for channel...','var(--accent)');
+  }else{$('termPanel').style.display='none';termWanted=false}
+}
+function openTerminal(){
+  if(!term){
+    term=new Terminal({cursorBlink:true,fontSize:13,theme:{background:'#0d1117',foreground:'#e6edf3'}});
+    termFit=new FitAddon.Fit();
+    term.loadAddon(termFit);
+    term.open($('termContainer'));termFit.fit();
+    term.onData(d=>{if(termDC&&termDC.readyState==='open')termDC.send(JSON.stringify({type:'terminal_input',data:d}))});
+    term.onResize(sz=>{if(termDC&&termDC.readyState==='open')termDC.send(JSON.stringify({type:'terminal_resize',rows:sz.rows,cols:sz.cols}))});
+  }
+  setTimeout(()=>{termFit&&termFit.fit();term&&term.focus()},50);
+}
+function termRestart(){
+  if(termDC&&termDC.readyState==='open')termDC.send(JSON.stringify({type:'terminal_start'}));
+  if(term){term.dispose();term=null;termFit=null}
+  setTimeout(()=>openTerminal(),300);
+}
+
 // ── Disconnect ──
 function disconnect(){
   if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}
   wasConnected=false;savedAgentId='';
   if(_inputDC)_inputDC.close();if(screenDC)screenDC.close();
-  if(fileDC)fileDC.close();if(clipboardDC)clipboardDC.close();
+  if(fileDC)fileDC.close();if(clipboardDC)clipboardDC.close();if(termDC)termDC.close();
   if(pc)pc.close();if(ws)ws.close();
-  _inputDC=screenDC=fileDC=clipboardDC=pc=ws=null;
+  _inputDC=screenDC=fileDC=clipboardDC=termDC=pc=ws=null;
   img=new Image();ctx.clearRect(0,0,canvas.width,canvas.height);
   $('connectBtn').style.display='';$('disconnectBtn').style.display='none';
-  $('fileBtn').style.display='none';$('clipBtn').style.display='none';
-  $('filePanel').style.display='none';$('passDialog').style.display='none';
+  $('fileBtn').style.display='none';$('clipBtn').style.display='none';$('termBtn').style.display='none';
+  $('filePanel').style.display='none';$('passDialog').style.display='none';$('termPanel').style.display='none';
+  if(term){term.dispose();term=null;termFit=null}termWanted=false;
   remoteFiles.clear();$('fileList').innerHTML='';
   if(statsUpdateTimer)clearInterval(statsUpdateTimer);
   $('statsBar').style.display='none';status('Idle');
