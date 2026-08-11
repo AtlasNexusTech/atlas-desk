@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -86,6 +87,28 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+
+	// Maintien de la liaison. Cloudflare ferme les WebSocket restes silencieux
+	// (~100 s), ce qui coupait agent et client au bout de ~2 min. On envoie donc
+	// une trame ping toutes les 30 s. WriteControl est sur en concurrence avec
+	// les autres ecritures (garantie gorilla/websocket), aucun verrou requis.
+	stopPing := make(chan struct{})
+	defer close(stopPing)
+	go func() {
+		t := time.NewTicker(30 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				if err := conn.WriteControl(websocket.PingMessage, nil,
+					time.Now().Add(10*time.Second)); err != nil {
+					return
+				}
+			case <-stopPing:
+				return
+			}
+		}
+	}()
 
 	var peer *Peer
 
